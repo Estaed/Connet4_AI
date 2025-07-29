@@ -278,7 +278,7 @@ def render_main_menu() -> None:
     print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
     print(f"\n{Colors.INFO}Select Game Mode:{Colors.RESET}")
     print(f"{Colors.SUCCESS}1. Human vs Human{Colors.RESET} (Interactive - Player 1 goes first)")
-    print(f"{Colors.WARNING}2. Random vs Random{Colors.RESET} (Testing)")
+    print(f"{Colors.SUCCESS}2. Random vs Random{Colors.RESET} (Agent Testing - Available!)")
     print(f"{Colors.INFO}3. Human vs AI{Colors.RESET} (Coming Soon - Human is Player 1)")
     print(f"{Colors.HEADER}4. View Statistics{Colors.RESET}")
     print(f"{Colors.ERROR}5. Exit{Colors.RESET}")
