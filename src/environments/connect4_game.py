@@ -14,29 +14,13 @@ Features:
 
 import numpy as np
 import time
+import sys
+import os
 from typing import List, Tuple, Optional, Dict, Any
 
-
-# ANSI Color Codes for terminal rendering
-class Colors:
-    """ANSI color codes for terminal styling."""
-    
-    # Player colors
-    PLAYER1 = '\033[91m'  # Red for Player 1 (X) - Human player
-    PLAYER2 = '\033[94m'  # Blue for Player 2 (O) - AI/Second player
-    EMPTY = '\033[90m'    # Gray for empty spaces
-    
-    # UI colors
-    HEADER = '\033[95m'   # Magenta for headers
-    SUCCESS = '\033[92m'  # Green for success/good stats
-    WARNING = '\033[93m'  # Yellow for warnings
-    ERROR = '\033[91m'    # Red for errors
-    INFO = '\033[96m'     # Cyan for info
-    
-    # Special
-    BOLD = '\033[1m'      # Bold text
-    UNDERLINE = '\033[4m' # Underlined text
-    RESET = '\033[0m'     # Reset to default
+# Add utils directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from utils.render import render_connect4_game
 
 
 class Connect4Game:
@@ -223,7 +207,7 @@ class Connect4Game:
         
     def render(self, mode: str = 'human', show_stats: bool = True) -> Optional[str]:
         """
-        Render the game board and statistics.
+        Render the game board and statistics using centralized rendering.
         
         Args:
             mode: Rendering mode ('human' for terminal output)
@@ -232,116 +216,7 @@ class Connect4Game:
         Returns:
             String representation if mode != 'human', None otherwise
         """
-        self.render_count += 1
-        current_time = time.time()
-        
-        # Calculate FPS
-        time_since_last = current_time - self.last_render_time
-        fps = 1.0 / time_since_last if time_since_last > 0 else 0.0
-        self.last_render_time = current_time
-        
-        # Build output string
-        output_lines = []
-        
-        # Column numbers with color (1-7 instead of 0-6)
-        header = " " + "".join(f" {i+1}  " for i in range(self.board_cols))
-        output_lines.append(f"{Colors.HEADER}{header}{Colors.RESET}")
-        output_lines.append(f"{Colors.HEADER}{'='*30}{Colors.RESET}")
-        
-        # Board display with colors
-        for row in range(self.board_rows):
-            row_str = f"{Colors.HEADER}|{Colors.RESET}"
-            for col in range(self.board_cols):
-                cell = self.board[row][col]
-                
-                if cell == 1:  # Player 1 (Human - Red X)
-                    symbol = f"{Colors.PLAYER1}X{Colors.RESET}"
-                elif cell == -1:  # Player 2 (AI - Blue O)
-                    symbol = f"{Colors.PLAYER2}O{Colors.RESET}"
-                else:  # Empty cell
-                    symbol = f"{Colors.EMPTY}.{Colors.RESET}"
-                
-                row_str += f" {symbol} {Colors.HEADER}|{Colors.RESET}"
-            output_lines.append(row_str)
-            
-        output_lines.append(f"{Colors.HEADER}{'='*23}{Colors.RESET}")
-        
-        # Current player info with colors
-        if self.current_player == 1:
-            player_symbol = f"{Colors.PLAYER1}X{Colors.RESET}"
-            player_display = f"{Colors.PLAYER1}Player 1{Colors.RESET}"
-        else:
-            player_symbol = f"{Colors.PLAYER2}O{Colors.RESET}"
-            player_display = f"{Colors.PLAYER2}Player 2{Colors.RESET}"
-            
-        output_lines.append(f"Current: {player_symbol} {player_display}")
-        
-        if show_stats:
-            # Performance metrics section with colors
-            output_lines.append("")
-            output_lines.append(f"{Colors.HEADER}{Colors.BOLD}{'='*60}{Colors.RESET}")
-            output_lines.append(f"{Colors.HEADER}{Colors.BOLD}CONNECT4 RL TRAINING - REAL-TIME STATS{Colors.RESET}")
-            output_lines.append(f"{Colors.HEADER}{Colors.BOLD}{'='*60}{Colors.RESET}")
-            output_lines.append("")
-            
-            # Performance metrics with colors
-            output_lines.append(f"{Colors.INFO}{Colors.BOLD}[PERFORMANCE METRICS]{Colors.RESET}")
-            game_time = current_time - self.start_time
-            output_lines.append(f"Games/sec:        {Colors.WARNING}0{Colors.RESET}")
-            output_lines.append(f"Total Games:      {Colors.INFO}1{Colors.RESET}")
-            output_lines.append(f"Episode:          {Colors.INFO}0{Colors.RESET}")
-            output_lines.append(f"Training Time:    {Colors.INFO}{game_time:08.2f}{Colors.RESET}")
-            output_lines.append("")
-            
-            # Win statistics with player colors
-            output_lines.append(f"{Colors.INFO}{Colors.BOLD}[WIN STATISTICS]{Colors.RESET}")
-            output_lines.append(f"Player 1 (X):     {Colors.PLAYER1}0.0%{Colors.RESET} (0 wins)")
-            output_lines.append(f"Player 2 (O):     {Colors.PLAYER2}0.0%{Colors.RESET} (0 wins)")
-            output_lines.append(f"Draws:            {Colors.WARNING}0.0%{Colors.RESET} (0 draws)")
-            output_lines.append(f"Avg Game Len:     {Colors.INFO}{self.move_count:.1f}{Colors.RESET} moves")
-            output_lines.append("")
-            
-            # GPU statistics (placeholder for future AI training)
-            output_lines.append(f"{Colors.INFO}{Colors.BOLD}[GPU STATISTICS]{Colors.RESET}")
-            output_lines.append(f"GPU Usage:        {Colors.WARNING}Not added yet{Colors.RESET}")
-            output_lines.append(f"GPU Memory:       {Colors.WARNING}Not added yet{Colors.RESET}")
-            output_lines.append(f"GPU Device:       {Colors.WARNING}Not added yet{Colors.RESET}")
-            output_lines.append("")
-            
-            output_lines.append(f"{Colors.HEADER}{'='*60}{Colors.RESET}")
-            output_lines.append(f"{Colors.INFO}Updates: 60 FPS | Renderer FPS: {fps:.1f}{Colors.RESET}")
-            output_lines.append(f"{Colors.HEADER}{'='*60}{Colors.RESET}")
-            
-        # Game over message with colors
-        if self.game_over:
-            output_lines.append("")
-            if self.winner == 0:
-                output_lines.append(f"{Colors.WARNING}{Colors.BOLD}GAME OVER - DRAW!{Colors.RESET}")
-            else:
-                if self.winner == 1:
-                    winner_symbol = f"{Colors.PLAYER1}X{Colors.RESET}"
-                    winner_display = f"{Colors.PLAYER1}{Colors.BOLD}Player 1{Colors.RESET}"
-                else:
-                    winner_symbol = f"{Colors.PLAYER2}O{Colors.RESET}" 
-                    winner_display = f"{Colors.PLAYER2}{Colors.BOLD}Player 2{Colors.RESET}"
-                output_lines.append(f"{Colors.SUCCESS}{Colors.BOLD}GAME OVER - {winner_display} ({winner_symbol}) WINS!{Colors.RESET}")
-        else:
-            output_lines.append("")
-            if self.current_player == 1:
-                prompt_player = f"{Colors.PLAYER1}Player X{Colors.RESET}"
-            else:
-                prompt_player = f"{Colors.PLAYER2}Player O{Colors.RESET}"
-            output_lines.append(f"{prompt_player}, enter column (1-{self.board_cols}):")
-            
-        output_str = "\n".join(output_lines)
-        
-        if mode == 'human':
-            # Clear screen and print (for terminal play)
-            print("\n" * 50)  # Simple screen clear
-            print(output_str)
-            return None
-        else:
-            return output_str
+        return render_connect4_game(self, mode, show_stats)
             
     def __str__(self) -> str:
         """String representation of the game board."""

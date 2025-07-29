@@ -125,7 +125,7 @@ jupyter>=1.0.0
 
 ### ✅ Phase 2: Core Game Implementation
 
-#### Task 2.1: Pure Game Logic
+#### ✅ Task 2.1: Pure Game Logic
 **Objective:** Implement Connect4 game without any ML dependencies  
 **Files:** `src/environments/connect4_game.py`  
 **Status:** ✅ **COMPLETED**
@@ -164,10 +164,10 @@ class Connect4Game:
 
 **Verification:** Can play complete games with win/draw detection
 
-#### Task 2.2: Gymnasium Environment Wrapper
+#### ✅ Task 2.2: Gymnasium Environment Wrapper
 **Objective:** Wrap game logic in standard Gymnasium interface  
 **Files:** `src/environments/connect4_env.py`  
-**Status:** 🔄 **PENDING**
+**Status:** ✅ **COMPLETED**
 
 **Details:**
 - Create `Connect4Env` class inheriting from `gym.Env`
