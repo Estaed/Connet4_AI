@@ -201,11 +201,42 @@ def render_connect4_game(game_obj, mode: str = 'human', show_stats: bool = True)
         output_lines.append(f"Avg Game Len:     {Colors.INFO}{game_obj.move_count:.1f}{Colors.RESET} moves")
         output_lines.append("")
         
-        # GPU statistics (placeholder for future AI training)
-        output_lines.append(f"{Colors.INFO}{Colors.BOLD}[GPU STATISTICS]{Colors.RESET}")
-        output_lines.append(f"GPU Usage:        {Colors.WARNING}Not added yet{Colors.RESET}")
-        output_lines.append(f"GPU Memory:       {Colors.WARNING}Not added yet{Colors.RESET}")
-        output_lines.append(f"GPU Device:       {Colors.WARNING}Not added yet{Colors.RESET}")
+        # Device/Hardware statistics  
+        output_lines.append(f"{Colors.INFO}{Colors.BOLD}[DEVICE STATISTICS]{Colors.RESET}")
+        
+        # Import here to avoid circular imports
+        try:
+            import torch
+            from src.core.config import get_config
+            config = get_config()
+            
+            # Game device (always CPU as per PRD)
+            game_device = config.get('device.game_device', 'cpu').upper()
+            output_lines.append(f"Game Logic:       {Colors.INFO}{game_device}{Colors.RESET}")
+            
+            # Training device (CPU/GPU based on availability)
+            training_device = config.get('device.training_device', 'cpu').upper()
+            if training_device == 'CUDA':
+                gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "Unknown"
+                output_lines.append(f"Training Device:  {Colors.SUCCESS}{training_device}{Colors.RESET}")
+                output_lines.append(f"GPU Name:         {Colors.SUCCESS}{gpu_name}{Colors.RESET}")
+                
+                # Show GPU memory if available
+                if torch.cuda.is_available():
+                    memory_allocated = torch.cuda.memory_allocated(0) / 1024**3  # GB
+                    memory_cached = torch.cuda.memory_reserved(0) / 1024**3  # GB  
+                    output_lines.append(f"GPU Memory:       {Colors.INFO}{memory_allocated:.2f}GB / {memory_cached:.2f}GB{Colors.RESET}")
+                else:
+                    output_lines.append(f"GPU Memory:       {Colors.WARNING}N/A{Colors.RESET}")
+            else:
+                output_lines.append(f"Training Device:  {Colors.INFO}{training_device}{Colors.RESET}")
+                output_lines.append(f"GPU Available:    {Colors.WARNING}{'Yes' if torch.cuda.is_available() else 'No'}{Colors.RESET}")
+                
+        except ImportError:
+            # Fallback if config system not available
+            output_lines.append(f"Game Logic:       {Colors.INFO}CPU{Colors.RESET}")
+            output_lines.append(f"Training Device:  {Colors.WARNING}Unknown{Colors.RESET}")
+            output_lines.append(f"Config Status:    {Colors.ERROR}Not loaded{Colors.RESET}")
         output_lines.append("")
         
         output_lines.append(f"{Colors.HEADER}{'='*60}{Colors.RESET}")

@@ -77,12 +77,16 @@ class Connect4Env(gym.Env):
                 }
             )
         
+        # Store previous board state for reward calculation
+        previous_board = self.game.board.copy()
+        previous_player = self.game.current_player
+        
         # Make the move
         success = self.game.drop_piece(action)
         assert success, "Move should be valid at this point"
         
-        # Calculate reward
-        reward = self._calculate_reward()
+        # Calculate strategic reward
+        reward = self._calculate_strategic_reward(previous_board, action, previous_player)
         
         # Get current state
         observation = self.game.board.copy()
@@ -160,29 +164,78 @@ class Connect4Env(gym.Env):
         """Clean up the environment."""
         pass
     
-    def _calculate_reward(self) -> float:
+    def _calculate_strategic_reward(self, previous_board: np.ndarray, action: int, player: int) -> float:
         """
-        Calculate reward based on current game state.
+        Calculate strategic reward based on game state changes and tactical analysis.
         
         Reward structure:
-        - +2.0 for winning
-        - -0.1 for draw  
-        - -1.0 for losing
-        - -0.01 for each move (to encourage shorter games)
+        Game Outcome (Terminal Rewards):
+        - Win: +3.0 (The ultimate goal)
+        - Loss: -3.0 (The ultimate failure)
+        - Draw: +0.1 (Slightly positive neutral outcome)
         
+        Immediate Threats & Defenses (High-Value Intermediate Rewards):
+        - Making a winning move: +1.0 (immediate win reward)
+        - Blocking opponent's winning move: +0.5
+        - Setting up "three-in-a-row": +0.2
+        
+        Positional & Strategic Advantages (Low-Value Intermediate Rewards):
+        - Setting up "two-in-a-row": +0.05
+        - Center column control: +0.01
+        
+        Penalties (Negative Intermediate Rewards):
+        - Allowing opponent immediate win: -0.7
+        
+        Args:
+            previous_board: Board state before the move
+            action: Column where piece was placed
+            player: Player who made the move
+            
         Returns:
-            Reward value
+            Strategic reward value
         """
+        # Check for game ending first
         if self.game.game_over:
-            if self.game.winner == 1:  # Player 1 (current perspective)
-                return 2.0
-            elif self.game.winner == -1:  # Player 2
-                return -1.0
-            else:  # Draw (winner == 0)
-                return -0.1
-        else:
-            # Small negative reward for each move to encourage efficiency
-            return -0.01
+            if self.game.winner == player:
+                return 3.0  # Win
+            elif self.game.winner == -player:
+                return -3.0  # Loss
+            else:
+                return 0.1  # Draw (slightly positive)
+        
+        reward = 0.0
+        
+        # Get the row where the piece was placed
+        placed_row = None
+        for row in range(self.game.board_rows):
+            if previous_board[row, action] == 0 and self.game.board[row, action] == player:
+                placed_row = row
+                break
+        
+        if placed_row is None:
+            return reward  # Shouldn't happen, but safety check
+        
+        # 1. Center Column Control (+0.01)
+        if action == 3:  # Center column (0-indexed)
+            reward += 0.01
+        
+        # 2. Check if this move blocked an opponent's winning move (+0.5)
+        if self._would_win_if_played(previous_board, action, -player):
+            reward += 0.5
+        
+        # 3. Check if this move allows opponent to win next turn (-0.7)
+        if self._allows_opponent_win(self.game.board, player):
+            reward -= 0.7
+        
+        # 4. Check for setting up three-in-a-row (+0.2)
+        if self._creates_three_in_row(self.game.board, placed_row, action, player):
+            reward += 0.2
+        
+        # 5. Check for setting up two-in-a-row (+0.05)
+        elif self._creates_two_in_row(self.game.board, placed_row, action, player):
+            reward += 0.05
+        
+        return reward
     
     def _get_action_mask(self) -> np.ndarray:
         """
@@ -196,3 +249,200 @@ class Connect4Env(gym.Env):
         for move in valid_moves:
             mask[move] = True
         return mask
+    
+    def _would_win_if_played(self, board: np.ndarray, col: int, player: int) -> bool:
+        """
+        Check if playing in a column would result in a win for the player.
+        
+        Args:
+            board: Board state to check
+            col: Column to test
+            player: Player to test for
+            
+        Returns:
+            True if playing in this column would win
+        """
+        # Find where the piece would land
+        row = None
+        for r in range(self.game.board_rows):
+            if board[r, col] == 0:
+                row = r
+                break
+        
+        if row is None:
+            return False  # Column is full
+        
+        # Temporarily place the piece
+        test_board = board.copy()
+        test_board[row, col] = player
+        
+        # Check for win in all directions
+        return self._check_win_at_position(test_board, row, col, player)
+    
+    def _check_win_at_position(self, board: np.ndarray, row: int, col: int, player: int) -> bool:
+        """
+        Check if there's a win starting from a specific position.
+        
+        Args:
+            board: Board state
+            row: Row position
+            col: Column position
+            player: Player to check for
+            
+        Returns:
+            True if there's a winning line through this position
+        """
+        directions = [
+            (0, 1),   # Horizontal
+            (1, 0),   # Vertical
+            (1, 1),   # Diagonal /
+            (1, -1),  # Diagonal \
+        ]
+        
+        for dr, dc in directions:
+            count = 1  # Count the placed piece
+            
+            # Check in positive direction
+            r, c = row + dr, col + dc
+            while (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                   board[r, c] == player):
+                count += 1
+                r, c = r + dr, c + dc
+            
+            # Check in negative direction
+            r, c = row - dr, col - dc
+            while (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                   board[r, c] == player):
+                count += 1
+                r, c = r - dr, c - dc
+            
+            if count >= 4:
+                return True
+        
+        return False
+    
+    def _allows_opponent_win(self, board: np.ndarray, current_player: int) -> bool:
+        """
+        Check if the current board state allows opponent to win on their next move.
+        
+        Args:
+            board: Current board state
+            current_player: Player who just moved
+            
+        Returns:
+            True if opponent can win on next move
+        """
+        opponent = -current_player
+        
+        for col in range(self.game.board_cols):
+            if self._would_win_if_played(board, col, opponent):
+                return True
+        
+        return False
+    
+    def _creates_three_in_row(self, board: np.ndarray, row: int, col: int, player: int) -> bool:
+        """
+        Check if the placed piece creates a three-in-a-row threat.
+        
+        Args:
+            board: Current board state
+            row: Row of placed piece
+            col: Column of placed piece
+            player: Player who placed the piece
+            
+        Returns:
+            True if this creates a three-in-a-row with open ends
+        """
+        directions = [
+            (0, 1),   # Horizontal
+            (1, 0),   # Vertical
+            (1, 1),   # Diagonal /
+            (1, -1),  # Diagonal \
+        ]
+        
+        for dr, dc in directions:
+            count = 1  # Count the placed piece
+            open_ends = 0
+            
+            # Check positive direction
+            r, c = row + dr, col + dc
+            while (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                   board[r, c] == player):
+                count += 1
+                r, c = r + dr, c + dc
+            
+            # Check if positive end is open and playable
+            if (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                board[r, c] == 0 and (r == self.game.board_rows - 1 or board[r + 1, c] != 0)):
+                open_ends += 1
+            
+            # Check negative direction
+            r, c = row - dr, col - dc
+            while (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                   board[r, c] == player):
+                count += 1
+                r, c = r - dr, c - dc
+            
+            # Check if negative end is open and playable
+            if (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                board[r, c] == 0 and (r == self.game.board_rows - 1 or board[r + 1, c] != 0)):
+                open_ends += 1
+            
+            # Three in a row with at least one open end is a threat
+            if count == 3 and open_ends > 0:
+                return True
+        
+        return False
+    
+    def _creates_two_in_row(self, board: np.ndarray, row: int, col: int, player: int) -> bool:
+        """
+        Check if the placed piece creates a two-in-a-row building block.
+        
+        Args:
+            board: Current board state
+            row: Row of placed piece
+            col: Column of placed piece
+            player: Player who placed the piece
+            
+        Returns:
+            True if this creates a two-in-a-row with open ends
+        """
+        directions = [
+            (0, 1),   # Horizontal
+            (1, 1),   # Diagonal /
+            (1, -1),  # Diagonal \
+        ]
+        
+        for dr, dc in directions:
+            count = 1  # Count the placed piece
+            open_ends = 0
+            
+            # Check positive direction
+            r, c = row + dr, col + dc
+            while (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                   board[r, c] == player):
+                count += 1
+                r, c = r + dr, c + dc
+            
+            # Check if positive end is open and has space for expansion
+            if (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                board[r, c] == 0):
+                open_ends += 1
+            
+            # Check negative direction
+            r, c = row - dr, col - dc
+            while (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                   board[r, c] == player):
+                count += 1
+                r, c = r - dr, c - dc
+            
+            # Check if negative end is open and has space for expansion
+            if (0 <= r < self.game.board_rows and 0 <= c < self.game.board_cols and 
+                board[r, c] == 0):
+                open_ends += 1
+            
+            # Two in a row with both ends open (room to grow to 4)
+            if count == 2 and open_ends >= 2:
+                return True
+        
+        return False
