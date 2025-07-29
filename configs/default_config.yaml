@@ -1,0 +1,76 @@
+# Connect4 RL Training System - Default Configuration
+# Version: 1.0.0
+# Date: July 2025
+
+# Game Configuration
+game:
+  board_rows: 6
+  board_cols: 7
+  win_length: 4
+  
+# Environment Configuration  
+environment:
+  reward_win: 1.0
+  reward_draw: -0.1
+  reward_loss: -1.0
+  reward_step: -0.01  # Small penalty per move to encourage faster games
+  max_steps: 42       # Maximum possible moves (6*7)
+
+# Device Configuration
+device:
+  # Game logic always runs on CPU for consistency
+  game_device: "cpu"
+  # Training device - will auto-detect GPU or fall back to CPU
+  training_device: "auto"  # auto | cpu | cuda
+  
+# PPO Agent Configuration
+ppo:
+  learning_rate: 0.0003
+  gamma: 0.99           # Discount factor
+  gae_lambda: 0.95      # GAE lambda for advantage estimation
+  clip_epsilon: 0.2     # PPO clipping parameter
+  value_loss_coeff: 0.5 # Value function loss coefficient
+  entropy_coeff: 0.01   # Entropy bonus coefficient
+  max_grad_norm: 0.5    # Gradient clipping
+  
+# Neural Network Configuration
+network:
+  # CNN Architecture for 6x7 board
+  conv_channels: [64, 128, 128]
+  conv_kernels: [4, 3, 3]
+  conv_padding: [2, 1, 1]
+  hidden_size: 128
+  
+# Training Configuration
+training:
+  max_episodes: 10000
+  update_frequency: 100    # Update agent every N episodes
+  checkpoint_interval: 1000 # Save checkpoint every N episodes
+  log_interval: 50         # Log progress every N episodes
+  
+# Memory Configuration
+memory:
+  buffer_size: 2048  # Experience buffer size
+  batch_size: 64     # Training batch size
+  
+# File Paths
+paths:
+  models_dir: "models"
+  logs_dir: "logs"
+  checkpoints_dir: "models/checkpoints"
+  
+# Logging Configuration
+logging:
+  level: "INFO"          # DEBUG | INFO | WARNING | ERROR
+  log_to_file: true
+  log_to_console: true
+  log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+# Random Seed for Reproducibility
+seed: 42
+
+# Evaluation Configuration
+evaluation:
+  eval_episodes: 100      # Episodes for evaluation
+  eval_frequency: 1000    # Evaluate every N training episodes
+  random_opponent_games: 50 # Games vs random agent for baseline
