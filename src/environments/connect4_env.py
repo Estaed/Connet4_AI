@@ -8,6 +8,7 @@ enabling integration with reinforcement learning frameworks.
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+import random
 from typing import Dict, Any, Tuple, Optional
 
 from .connect4_game import Connect4Game
@@ -23,12 +24,13 @@ class Connect4Env(gym.Env):
     
     metadata = {'render_modes': ['human', 'ansi']}
     
-    def __init__(self, render_mode: Optional[str] = None):
+    def __init__(self, render_mode: Optional[str] = None, random_start: bool = True):
         """
         Initialize the Connect4 environment.
         
         Args:
             render_mode: Mode for rendering ('human' or 'ansi')
+            random_start: Whether to randomly select starting player
         """
         super().__init__()
         
@@ -41,6 +43,7 @@ class Connect4Env(gym.Env):
         # Initialize game
         self.game = Connect4Game()
         self.render_mode = render_mode
+        self.random_start = random_start
         
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """
@@ -102,24 +105,32 @@ class Connect4Env(gym.Env):
         Reset the environment to initial state.
         
         Args:
-            seed: Random seed (not used in deterministic Connect4)
+            seed: Random seed for starting player selection
             options: Additional options (not used)
             
         Returns:
             Tuple of (initial_observation, info)
         """
-        # Handle seeding (though Connect4 is deterministic)
+        # Handle seeding
         super().reset(seed=seed)
+        if seed is not None:
+            random.seed(seed)
         
         # Reset the game
         observation = self.game.reset()
+        
+        # Randomly select starting player if enabled
+        if self.random_start:
+            starting_player = random.choice([1, -1])
+            self.game.current_player = starting_player
         
         info = {
             'valid_moves': self.game.get_valid_moves(),
             'action_mask': self._get_action_mask(),
             'current_player': self.game.current_player,
             'move_count': self.game.move_count,
-            'winner': None
+            'winner': None,
+            'starting_player': self.game.current_player
         }
         
         return observation, info

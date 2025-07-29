@@ -14,29 +14,14 @@ and testing the game logic before AI training.
 import sys
 import os
 import time
+import random
 from typing import Optional
 
-
-# ANSI Color Codes for terminal styling
-class Colors:
-    """ANSI color codes for terminal styling."""
-    
-    # Player colors
-    PLAYER1 = '\033[91m'  # Red for Player 1 (X)
-    PLAYER2 = '\033[94m'  # Blue for Player 2 (O)
-    EMPTY = '\033[90m'    # Gray for empty spaces
-    
-    # UI colors
-    HEADER = '\033[95m'   # Magenta for headers
-    SUCCESS = '\033[92m'  # Green for success/good stats
-    WARNING = '\033[93m'  # Yellow for warnings
-    ERROR = '\033[91m'    # Red for errors
-    INFO = '\033[96m'     # Cyan for info
-    
-    # Special
-    BOLD = '\033[1m'      # Bold text
-    UNDERLINE = '\033[4m' # Underlined text
-    RESET = '\033[0m'     # Reset to default
+# Add utils directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from utils.render import (Colors, render_main_menu, render_game_mode_header, 
+                         render_game_instructions, render_game_summary, 
+                         render_statistics, render_development_message)
 
 # Add src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -68,16 +53,7 @@ class GameInterface:
         
     def display_main_menu(self) -> None:
         """Display the main menu with game mode options."""
-        print(f"\n{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        print(f"{Colors.BOLD}{Colors.HEADER}*** CONNECT4 RL TRAINING SYSTEM ***{Colors.RESET}")
-        print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        print(f"\n{Colors.INFO}Select Game Mode:{Colors.RESET}")
-        print(f"{Colors.SUCCESS}1. Human vs Human{Colors.RESET} (Interactive - Player 1 goes first)")
-        print(f"{Colors.WARNING}2. Random vs Random{Colors.RESET} (Testing)")
-        print(f"{Colors.INFO}3. Human vs AI{Colors.RESET} (Coming Soon - Human is Player 1)")
-        print(f"{Colors.HEADER}4. View Statistics{Colors.RESET}")
-        print(f"{Colors.ERROR}5. Exit{Colors.RESET}")
-        print(f"\n{Colors.HEADER}{'-' * 50}{Colors.RESET}")
+        render_main_menu()
         
     def get_user_choice(self, prompt: str, valid_choices: list) -> str:
         """
@@ -144,22 +120,21 @@ class GameInterface:
                 
     def play_human_vs_human(self) -> None:
         """Play Human vs Human mode."""
-        print(f"\n{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        print(f"{Colors.SUCCESS}{Colors.BOLD}>>> HUMAN vs HUMAN MODE <<<{Colors.RESET}")
-        print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        print(f"{Colors.INFO}Instructions:{Colors.RESET}")
-        print(f"- {Colors.INFO}Players take turns dropping pieces{Colors.RESET}")
-        print(f"- {Colors.PLAYER1}Player 1 (RED X){Colors.RESET}: Goes first - Human player")  
-        print(f"- {Colors.PLAYER2}Player 2 (BLUE O){Colors.RESET}: Goes second - Second player")
-        print(f"- {Colors.WARNING}Enter column number (1-7) to drop piece{Colors.RESET}")
-        print(f"- {Colors.ERROR}Type 'q' to quit game{Colors.RESET}")
-        print(f"- {Colors.SUCCESS}Connect 4 pieces in a row to win!{Colors.RESET}")
-        print(f"- {Colors.INFO}Board is colorized: {Colors.PLAYER1}RED{Colors.RESET} for Player 1, {Colors.PLAYER2}BLUE{Colors.RESET} for Player 2")
-        print(f"\n{Colors.WARNING}Press Enter to start...{Colors.RESET}")
+        render_game_mode_header("HUMAN vs HUMAN MODE")
+        render_game_instructions()
+        
+        # Randomly decide who starts first
+        starting_player = random.choice([1, -1])
+        if starting_player == 1:
+            print(f"{Colors.INFO}🎲 Random selection: Player X starts first!{Colors.RESET}")
+        else:
+            print(f"{Colors.INFO}🎲 Random selection: Player O starts first!{Colors.RESET}")
+        
         input()
         
-        # Initialize new game
+        # Initialize new game with random starting player
         self.game.reset()
+        self.game.current_player = starting_player
         game_start_time = time.time()
         
         # Game loop
@@ -200,10 +175,7 @@ class GameInterface:
             self.stats['draws'] += 1
             
         # Show game summary
-        print(f"\n{Colors.INFO}{Colors.BOLD}Game Summary:{Colors.RESET}")
-        print(f"- {Colors.INFO}Duration: {game_time:.1f} seconds{Colors.RESET}")
-        print(f"- {Colors.INFO}Total moves: {self.game.move_count}{Colors.RESET}")
-        print(f"- {Colors.INFO}Moves per second: {self.game.move_count / game_time:.1f}{Colors.RESET}")
+        render_game_summary(game_time, self.game.move_count)
         
         input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
         
@@ -221,28 +193,12 @@ class GameInterface:
         print(f"\n{Colors.HEADER}{'=' * 50}{Colors.RESET}")
         print(f"{Colors.INFO}{Colors.BOLD}>>> HUMAN vs AI MODE <<<{Colors.RESET}")
         print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        print(f"{Colors.INFO}This mode will be available after PPO agent implementation.{Colors.RESET}")  
-        print(f"{Colors.WARNING}Coming in Phase 4 of the project...{Colors.RESET}")
+        render_development_message("PPO agents", "Coming in Phase 4 of the project...")
         input(f"{Colors.INFO}Press Enter to return to main menu...{Colors.RESET}")
         
     def view_statistics(self) -> None:
         """Display game statistics."""
-        print(f"\n{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        print(f"{Colors.HEADER}{Colors.BOLD}>>> GAME STATISTICS <<<{Colors.RESET}")
-        print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        
-        if self.stats['games_played'] == 0:
-            print(f"{Colors.WARNING}No games played yet.{Colors.RESET}")
-        else:
-            total_games = self.stats['games_played']
-            avg_moves = self.stats['total_moves'] / total_games
-            
-            print(f"{Colors.INFO}Total Games Played: {Colors.SUCCESS}{total_games}{Colors.RESET}")
-            print(f"{Colors.PLAYER1}Player 1 (X) Wins:{Colors.RESET}  {self.stats['player1_wins']} ({self.stats['player1_wins']/total_games*100:.1f}%)")
-            print(f"{Colors.PLAYER2}Player 2 (O) Wins:{Colors.RESET}  {self.stats['player2_wins']} ({self.stats['player2_wins']/total_games*100:.1f}%)")
-            print(f"{Colors.WARNING}Draws:{Colors.RESET}              {self.stats['draws']} ({self.stats['draws']/total_games*100:.1f}%)")
-            print(f"{Colors.INFO}Average Game Length: {avg_moves:.1f} moves{Colors.RESET}")
-            
+        render_statistics(self.stats)
         input(f"\n{Colors.INFO}Press Enter to return to main menu...{Colors.RESET}")
         
     def run(self) -> None:
