@@ -135,12 +135,15 @@ class GameInterface:
         starting_player = random.choice([1, -1])
         if starting_player == 1:
             print(
-                f"{Colors.INFO}🎲 Random selection: Player X starts first!{Colors.RESET}"
+                f"{Colors.HEADER}🎲 Random selection: Player X (Human) starts first!{Colors.RESET}"
             )
         else:
             print(
-                f"{Colors.INFO}🎲 Random selection: Player O starts first!{Colors.RESET}"
+                f"{Colors.HEADER}🎲 Random selection: Player O (Human) starts first!{Colors.RESET}"
             )
+
+        # Brief pause to show the selection
+        time.sleep(0.5)
 
         input()
 
@@ -242,6 +245,19 @@ class GameInterface:
             starting_player = random.choice([1, -1])
             self.game.current_player = starting_player
 
+            # Announce which agent starts first
+            if starting_player == 1:
+                print(
+                    f"{Colors.SUCCESS}🎲 Random selection: RandomAgent_1 (X) starts first!{Colors.RESET}"
+                )
+            else:
+                print(
+                    f"{Colors.WARNING}🎲 Random selection: RandomAgent_2 (O) starts first!{Colors.RESET}"
+                )
+
+            # Brief pause to show the selection
+            time.sleep(0.5)
+
             # Reset agents for new episode
             agent1.reset_episode()
             agent2.reset_episode()
@@ -255,7 +271,7 @@ class GameInterface:
             # Game loop
             while not self.game.game_over:
                 # Show current board state
-                self.game.render(show_stats=False)
+                self.game.render(show_stats=True)
 
                 # Get valid moves
                 valid_moves = self.game.get_valid_moves()
@@ -291,7 +307,7 @@ class GameInterface:
                 current_agent, other_agent = other_agent, current_agent
 
             # Game completed - show final state
-            self.game.render(show_stats=False)
+            self.game.render(show_stats=True)
 
             game_time = time.time() - game_start_time
 
