@@ -597,7 +597,7 @@ class GameInterface:
         
         try:
             # Import training interface
-            from train import TrainingInterface
+            from src.training.training_interface import TrainingInterface
             
             print(f"{Colors.INFO}Initializing PPO training system...{Colors.RESET}")
             training_interface = TrainingInterface()

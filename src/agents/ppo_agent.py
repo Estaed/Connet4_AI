@@ -537,6 +537,177 @@ class PPOAgent(BaseAgent):
         
         return metrics
     
+    def get_actions_batch(self, 
+                         observations: torch.Tensor,
+                         valid_actions_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Get actions for a batch of observations (for vectorized environments).
+        
+        Args:
+            observations: Batch of board states [batch_size, 6, 7]
+            valid_actions_mask: Binary mask for valid actions [batch_size, 7]
+            
+        Returns:
+            Tuple of (actions, log_probs, values)
+        """
+        batch_size = observations.shape[0]
+        
+        # Add channel dimension if needed
+        if len(observations.shape) == 3:
+            observations = observations.unsqueeze(1)  # [batch, 1, 6, 7]
+        
+        with torch.no_grad():
+            # Forward pass
+            policy_logits, values = self.network(observations)
+            
+            # Apply action masking
+            masked_logits = self._apply_action_mask(policy_logits, valid_actions_mask)
+            
+            # Get action distribution
+            action_probs = F.softmax(masked_logits, dim=-1)
+            action_dist = torch.distributions.Categorical(action_probs)
+            
+            # Sample actions
+            actions = action_dist.sample()
+            log_probs = action_dist.log_prob(actions)
+            
+            # Squeeze values if needed
+            if len(values.shape) > 1:
+                values = values.squeeze(-1)
+        
+        return actions, log_probs, values
+    
+    def train_on_experiences(self, experiences: List[Dict[str, Any]]) -> Dict[str, float]:
+        """
+        Train the agent on a batch of experiences from vectorized environments.
+        
+        Args:
+            experiences: List of experience dictionaries
+            
+        Returns:
+            Dictionary of training metrics
+        """
+        if not experiences:
+            return {}
+        
+        # Convert experiences to tensors efficiently
+        import numpy as np
+        states = torch.FloatTensor(np.array([exp['obs'] for exp in experiences])).to(self.device)
+        actions = torch.LongTensor(np.array([exp['action'] for exp in experiences])).to(self.device)
+        rewards = torch.FloatTensor(np.array([exp['reward'] for exp in experiences])).to(self.device)
+        dones = torch.BoolTensor(np.array([exp['done'] for exp in experiences])).to(self.device)
+        old_log_probs = torch.FloatTensor(np.array([exp['log_prob'] for exp in experiences])).to(self.device)
+        old_values = torch.FloatTensor(np.array([exp['value'] for exp in experiences])).to(self.device)
+        
+        # Compute advantages and returns
+        advantages, returns = self._compute_gae(rewards, old_values, dones)
+        
+        # Normalize advantages
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        
+        # Training metrics
+        total_policy_loss = 0.0
+        total_value_loss = 0.0
+        total_entropy_loss = 0.0
+        
+        # PPO update epochs
+        for epoch in range(self.ppo_epochs):
+            # Create mini-batches
+            batch_size = min(self.batch_size, len(experiences))
+            indices = torch.randperm(len(experiences))[:batch_size]
+            
+            batch_states = states[indices]
+            batch_actions = actions[indices]
+            batch_advantages = advantages[indices]
+            batch_returns = returns[indices]
+            batch_old_log_probs = old_log_probs[indices]
+            
+            # Add channel dimension if needed
+            if len(batch_states.shape) == 3:
+                batch_states = batch_states.unsqueeze(1)
+            
+            # Forward pass
+            policy_logits, values = self.network(batch_states)
+            
+            # Get action probabilities
+            action_probs = F.softmax(policy_logits, dim=-1)
+            action_dist = torch.distributions.Categorical(action_probs)
+            
+            # New log probabilities and entropy
+            new_log_probs = action_dist.log_prob(batch_actions)
+            entropy = action_dist.entropy().mean()
+            
+            # PPO policy loss
+            ratio = torch.exp(new_log_probs - batch_old_log_probs)
+            surr1 = ratio * batch_advantages
+            surr2 = torch.clamp(ratio, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon) * batch_advantages
+            policy_loss = -torch.min(surr1, surr2).mean()
+            
+            # Value loss
+            if len(values.shape) > 1:
+                values = values.squeeze(-1)
+            value_loss = F.mse_loss(values, batch_returns)
+            
+            # Total loss
+            loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy
+            
+            # Backward pass
+            self.optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.network.parameters(), self.max_grad_norm)
+            self.optimizer.step()
+            
+            # Accumulate losses
+            total_policy_loss += policy_loss.item()
+            total_value_loss += value_loss.item()
+            total_entropy_loss += entropy.item()
+        
+        # Calculate win rate from experiences
+        wins = sum(1 for exp in experiences if exp['done'] and exp['reward'] > 0.5)
+        total_episodes = sum(1 for exp in experiences if exp['done'])
+        win_rate = (wins / total_episodes * 100) if total_episodes > 0 else 0.0
+        
+        return {
+            'policy_loss': total_policy_loss / self.ppo_epochs,
+            'value_loss': total_value_loss / self.ppo_epochs,
+            'entropy': total_entropy_loss / self.ppo_epochs,
+            'win_rate': win_rate,
+            'total_episodes': total_episodes,
+            'batch_size': len(experiences)
+        }
+    
+    def _compute_gae(self, rewards: torch.Tensor, values: torch.Tensor, 
+                     dones: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Compute Generalized Advantage Estimation (GAE).
+        
+        Args:
+            rewards: Reward tensor
+            values: Value tensor
+            dones: Done tensor
+            
+        Returns:
+            Tuple of (advantages, returns)
+        """
+        advantages = torch.zeros_like(rewards)
+        returns = torch.zeros_like(rewards)
+        
+        gae = 0
+        for t in reversed(range(len(rewards))):
+            if t == len(rewards) - 1:
+                next_value = 0
+                next_non_terminal = 1.0 - dones[t].float()
+            else:
+                next_value = values[t + 1]
+                next_non_terminal = 1.0 - dones[t].float()
+            
+            delta = rewards[t] + self.gamma * next_value * next_non_terminal - values[t]
+            gae = delta + self.gamma * self.gae_lambda * next_non_terminal * gae
+            advantages[t] = gae
+            returns[t] = gae + values[t]
+        
+        return advantages, returns
+
     def _apply_action_mask(self, 
                           logits: torch.Tensor, 
                           valid_actions_mask: torch.Tensor) -> torch.Tensor:

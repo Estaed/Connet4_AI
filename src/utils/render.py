@@ -424,8 +424,9 @@ def render_training_menu() -> None:
     print(f"{Colors.WARNING}2. Small Training{Colors.RESET}      - 10,000 steps (Basic learning)")
     print(f"{Colors.INFO}3. Medium Training{Colors.RESET}     - 100,000 steps (Advanced training)")
     print(f"{Colors.ERROR}4. Impossible Training{Colors.RESET} - 1,000,000 steps (Maximum challenge)")
-    print(f"{Colors.HEADER}5. Training Settings{Colors.RESET}   - Configure checkpoint & TensorBoard options")
-    print(f"{Colors.HEADER}6. Back to Main Menu{Colors.RESET}")
+    print(f"{Colors.BOLD}5. Custom Training{Colors.RESET}     - Choose your own steps & environments")
+    print(f"{Colors.HEADER}6. Training Settings{Colors.RESET}   - Configure checkpoint & TensorBoard options")
+    print(f"{Colors.HEADER}7. Back to Main Menu{Colors.RESET}")
     print(f"\n{Colors.HEADER}{'-' * 60}{Colors.RESET}")
 
 
