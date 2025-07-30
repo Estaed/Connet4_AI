@@ -323,7 +323,7 @@ def render_main_menu() -> None:
         f"{Colors.BOLD}{Colors.HEADER}*** CONNECT4 RL TRAINING SYSTEM ***{Colors.RESET}"
     )
     print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-    print(f"\n{Colors.INFO}Select Game Mode:{Colors.RESET}")
+    print(f"\n{Colors.INFO}Select Mode:{Colors.RESET}")
     print(
         f"{Colors.SUCCESS}1. Human vs Human{Colors.RESET} (Interactive - Player 1 goes first)"
     )
@@ -333,8 +333,9 @@ def render_main_menu() -> None:
     print(
         f"{Colors.INFO}3. Human vs AI{Colors.RESET} (Coming Soon - Human is Player 1)"
     )
-    print(f"{Colors.HEADER}4. View Statistics{Colors.RESET}")
-    print(f"{Colors.ERROR}5. Exit{Colors.RESET}")
+    print(f"{Colors.SUCCESS}4. Start Training{Colors.RESET} (PPO Agent Training - Available!)")
+    print(f"{Colors.HEADER}5. View Statistics{Colors.RESET}")
+    print(f"{Colors.ERROR}6. Exit{Colors.RESET}")
     print(f"\n{Colors.HEADER}{'-' * 50}{Colors.RESET}")
 
 
@@ -409,3 +410,189 @@ def render_development_message(
         f"{Colors.INFO}This mode will be implemented when {feature_name} are available.{Colors.RESET}"
     )
     print(f"{Colors.WARNING}{phase_info}{Colors.RESET}")
+
+
+def render_training_menu() -> None:
+    """Display the training level selection menu."""
+    print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.HEADER}*** CONNECT4 RL TRAINING SYSTEM ***{Colors.RESET}")
+    print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+    print(f"\n{Colors.INFO}Select Training Level:{Colors.RESET}")
+    print(f"{Colors.SUCCESS}1. Test Training{Colors.RESET}       - 1,000 steps (Quick validation)")
+    print(f"{Colors.WARNING}2. Small Training{Colors.RESET}      - 10,000 steps (Basic learning)")
+    print(f"{Colors.INFO}3. Medium Training{Colors.RESET}     - 100,000 steps (Advanced training)")
+    print(f"{Colors.ERROR}4. Impossible Training{Colors.RESET} - 1,000,000 steps (Maximum challenge)")
+    print(f"{Colors.HEADER}5. Back to Main Menu{Colors.RESET}")
+    print(f"\n{Colors.HEADER}{'-' * 60}{Colors.RESET}")
+
+
+def render_training_header(level_name: str, total_steps: int, num_envs: int = 1) -> None:
+    """Render training session header."""
+    print(f"\n{Colors.HEADER}{'=' * 70}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.SUCCESS}>>> {level_name.upper()} TRAINING SESSION <<<{Colors.RESET}")
+    print(f"{Colors.HEADER}{'=' * 70}{Colors.RESET}")
+    print(f"{Colors.INFO}Training Steps: {Colors.WARNING}{total_steps:,}{Colors.RESET}")
+    print(f"{Colors.INFO}Environments: {Colors.WARNING}{num_envs}{Colors.RESET}")
+    print(f"{Colors.INFO}Training Mode: {Colors.SUCCESS}Self-Play PPO{Colors.RESET}")
+    print(f"{Colors.HEADER}{'-' * 70}{Colors.RESET}")
+
+
+def render_training_progress(
+    episode: int,
+    total_episodes: int,
+    win_stats: dict,
+    ppo_metrics: dict,
+    performance_stats: dict
+) -> None:
+    """
+    Render real-time training progress and statistics.
+    
+    Args:
+        episode: Current episode number
+        total_episodes: Total episodes for this training session
+        win_stats: Dictionary with win statistics (player1_wins, player2_wins, draws)
+        ppo_metrics: Dictionary with PPO training metrics (loss, reward, etc.)
+        performance_stats: Dictionary with performance metrics (fps, games_per_sec, etc.)
+    """
+    import time
+    
+    # Progress calculation
+    progress_percent = (episode / total_episodes) * 100 if total_episodes > 0 else 0
+    
+    print(f"\n{Colors.HEADER}{'=' * 80}{Colors.RESET}")
+    print(f"{Colors.HEADER}{Colors.BOLD}CONNECT4 RL TRAINING - LIVE PROGRESS{Colors.RESET}")
+    print(f"{Colors.HEADER}{'=' * 80}{Colors.RESET}")
+    
+    # Training Progress Section
+    print(f"{Colors.INFO}{Colors.BOLD}[TRAINING PROGRESS]{Colors.RESET}")
+    print(f"Episode:          {Colors.WARNING}{episode:,}{Colors.RESET} / {Colors.INFO}{total_episodes:,}{Colors.RESET}")
+    print(f"Progress:         {Colors.SUCCESS}{progress_percent:.1f}%{Colors.RESET}")
+    
+    # Create simple progress bar (ASCII only for Windows compatibility)
+    bar_width = 40
+    filled_width = int(bar_width * progress_percent / 100)
+    bar = "#" * filled_width + "-" * (bar_width - filled_width)
+    print(f"Progress Bar:     {Colors.SUCCESS}[{bar}]{Colors.RESET}")
+    print()
+    
+    # Win Statistics Section
+    print(f"{Colors.INFO}{Colors.BOLD}[WIN STATISTICS]{Colors.RESET}")
+    total_games = win_stats.get('total_games', 0)
+    if total_games > 0:
+        p1_wins = win_stats.get('player1_wins', 0)
+        p2_wins = win_stats.get('player2_wins', 0)
+        draws = win_stats.get('draws', 0)
+        
+        p1_rate = (p1_wins / total_games) * 100
+        p2_rate = (p2_wins / total_games) * 100
+        draw_rate = (draws / total_games) * 100
+        
+        print(f"Total Games:      {Colors.INFO}{total_games:,}{Colors.RESET}")
+        print(f"Player 1 (X):     {Colors.PLAYER1}{p1_rate:.1f}%{Colors.RESET} ({p1_wins:,} wins)")
+        print(f"Player 2 (O):     {Colors.PLAYER2}{p2_rate:.1f}%{Colors.RESET} ({p2_wins:,} wins)")
+        print(f"Draws:            {Colors.WARNING}{draw_rate:.1f}%{Colors.RESET} ({draws:,} draws)")
+        print(f"Avg Game Length:  {Colors.INFO}{win_stats.get('avg_game_length', 0):.1f}{Colors.RESET} moves")
+    else:
+        print(f"Total Games:      {Colors.WARNING}0{Colors.RESET} (Starting...)")
+    print()
+    
+    # PPO Metrics Section
+    print(f"{Colors.INFO}{Colors.BOLD}[PPO TRAINING METRICS]{Colors.RESET}")
+    print(f"Policy Loss:      {Colors.WARNING}{ppo_metrics.get('policy_loss', 0.0):.6f}{Colors.RESET}")
+    print(f"Value Loss:       {Colors.WARNING}{ppo_metrics.get('value_loss', 0.0):.6f}{Colors.RESET}")
+    print(f"Total Loss:       {Colors.ERROR}{ppo_metrics.get('total_loss', 0.0):.6f}{Colors.RESET}")
+    print(f"Avg Reward:       {Colors.SUCCESS}{ppo_metrics.get('avg_reward', 0.0):.3f}{Colors.RESET}")
+    print(f"Entropy:          {Colors.INFO}{ppo_metrics.get('entropy', 0.0):.6f}{Colors.RESET}")
+    print()
+    
+    # Performance Statistics Section
+    print(f"{Colors.INFO}{Colors.BOLD}[PERFORMANCE METRICS]{Colors.RESET}")
+    print(f"Episodes/sec:     {Colors.WARNING}{performance_stats.get('episodes_per_sec', 0.0):.2f}{Colors.RESET}")
+    print(f"Games/sec:        {Colors.WARNING}{performance_stats.get('games_per_sec', 0.0):.2f}{Colors.RESET}")
+    print(f"Training Time:    {Colors.INFO}{performance_stats.get('training_time', 0.0):.1f}{Colors.RESET} seconds")
+    print(f"Est. Remaining:   {Colors.INFO}{performance_stats.get('eta', 0.0):.1f}{Colors.RESET} seconds")
+    print()
+    
+    # Device Information Section  
+    print(f"{Colors.INFO}{Colors.BOLD}[DEVICE STATISTICS]{Colors.RESET}")
+    print(f"Game Logic:       {Colors.INFO}CPU{Colors.RESET}")
+    
+    try:
+        import torch
+        if torch.cuda.is_available():
+            device_name = torch.cuda.get_device_name(0)
+            memory_allocated = torch.cuda.memory_allocated(0) / 1024**3  # GB
+            memory_cached = torch.cuda.memory_reserved(0) / 1024**3  # GB
+            print(f"Training Device:  {Colors.SUCCESS}GPU{Colors.RESET}")
+            print(f"GPU Name:         {Colors.SUCCESS}{device_name}{Colors.RESET}")
+            print(f"GPU Memory:       {Colors.INFO}{memory_allocated:.2f}GB / {memory_cached:.2f}GB{Colors.RESET}")
+        else:
+            print(f"Training Device:  {Colors.WARNING}CPU{Colors.RESET}")
+            print(f"GPU Available:    {Colors.ERROR}No{Colors.RESET}")
+    except ImportError:
+        print(f"Training Device:  {Colors.WARNING}CPU{Colors.RESET}")
+        print(f"PyTorch:          {Colors.ERROR}Not available{Colors.RESET}")
+    
+    print(f"{Colors.HEADER}{'=' * 80}{Colors.RESET}")
+
+
+def render_training_complete(
+    level_name: str,
+    total_time: float,
+    total_episodes: int,
+    final_win_stats: dict,
+    final_metrics: dict
+) -> None:
+    """Render training completion summary."""
+    print(f"\n{Colors.SUCCESS}{'=' * 70}{Colors.RESET}")
+    print(f"{Colors.SUCCESS}{Colors.BOLD}>>> {level_name.upper()} TRAINING COMPLETED! <<<{Colors.RESET}")
+    print(f"{Colors.SUCCESS}{'=' * 70}{Colors.RESET}")
+    
+    print(f"\n{Colors.INFO}{Colors.BOLD}Final Training Summary:{Colors.RESET}")
+    print(f"Total Time:       {Colors.INFO}{total_time:.1f}{Colors.RESET} seconds")
+    print(f"Total Episodes:   {Colors.INFO}{total_episodes:,}{Colors.RESET}")
+    print(f"Episodes/sec:     {Colors.WARNING}{total_episodes/total_time:.2f}{Colors.RESET}")
+    
+    # Final win statistics
+    total_games = final_win_stats.get('total_games', 0)
+    if total_games > 0:
+        print(f"\n{Colors.INFO}{Colors.BOLD}Final Win Statistics:{Colors.RESET}")
+        p1_wins = final_win_stats.get('player1_wins', 0)
+        p2_wins = final_win_stats.get('player2_wins', 0)
+        draws = final_win_stats.get('draws', 0)
+        
+        print(f"Player 1 (X):     {Colors.PLAYER1}{(p1_wins/total_games)*100:.1f}%{Colors.RESET} ({p1_wins:,} wins)")
+        print(f"Player 2 (O):     {Colors.PLAYER2}{(p2_wins/total_games)*100:.1f}%{Colors.RESET} ({p2_wins:,} wins)")
+        print(f"Draws:            {Colors.WARNING}{(draws/total_games)*100:.1f}%{Colors.RESET} ({draws:,} draws)")
+    
+    # Final PPO metrics
+    if final_metrics:
+        print(f"\n{Colors.INFO}{Colors.BOLD}Final PPO Metrics:{Colors.RESET}")
+        print(f"Final Policy Loss: {Colors.WARNING}{final_metrics.get('policy_loss', 0.0):.6f}{Colors.RESET}")
+        print(f"Final Value Loss:  {Colors.WARNING}{final_metrics.get('value_loss', 0.0):.6f}{Colors.RESET}")
+        print(f"Final Avg Reward:  {Colors.SUCCESS}{final_metrics.get('avg_reward', 0.0):.3f}{Colors.RESET}")
+    
+    print(f"\n{Colors.SUCCESS}Training session saved and completed successfully!{Colors.RESET}")
+    print(f"{Colors.SUCCESS}{'=' * 70}{Colors.RESET}")
+
+
+def render_training_game_state(game_obj, episode: int, step: int, agent_name: str = "PPO Agent"):
+    """
+    Render the current game state during training with training-specific information.
+    
+    Args:
+        game_obj: Connect4Game instance
+        episode: Current episode number
+        step: Current step in episode
+        agent_name: Name of the training agent
+    """
+    # Use existing game rendering with additional training context
+    print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+    print(f"{Colors.BOLD}TRAINING SESSION - Episode {episode}, Step {step}{Colors.RESET}")
+    print(f"{Colors.INFO}Agent: {agent_name} (Self-Play Mode){Colors.RESET}")
+    print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+    
+    # Use existing Connect4 game rendering
+    render_connect4_game(game_obj, mode="human", show_stats=False)
+    
+    print(f"{Colors.INFO}Training in progress... {agent_name} is learning to play Connect4{Colors.RESET}")

@@ -607,11 +607,12 @@ def create_agent(agent_type: str, **kwargs) -> BaseAgent:
     """
     # Import here to avoid circular imports
     from .random_agent import RandomAgent
+    from .ppo_agent import PPOAgent
     
     # This will be populated as more agents are implemented
     agent_registry = {
         'random': RandomAgent,  # Task 3.2 - COMPLETED
-        # 'ppo': PPOAgent,       # Task 4.1
+        'ppo': PPOAgent,        # Task 4.1 - COMPLETED
     }
     
     if agent_type.lower() not in agent_registry:

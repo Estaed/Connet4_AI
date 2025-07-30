@@ -394,6 +394,33 @@ class GameInterface:
         render_statistics(self.stats)
         input(f"\n{Colors.INFO}Press Enter to return to main menu...{Colors.RESET}")
 
+    def start_training(self) -> None:
+        """Launch the training interface."""
+        print(f"\n{Colors.HEADER}{'=' * 50}{Colors.RESET}")
+        print(f"{Colors.INFO}{Colors.BOLD}>>> LAUNCHING TRAINING SYSTEM <<<{Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
+        
+        try:
+            # Import training interface
+            from train import TrainingInterface
+            
+            print(f"{Colors.INFO}Initializing PPO training system...{Colors.RESET}")
+            training_interface = TrainingInterface()
+            
+            print(f"{Colors.SUCCESS}Training system ready!{Colors.RESET}")
+            input(f"{Colors.WARNING}Press Enter to continue to training menu...{Colors.RESET}")
+            
+            # Launch training interface
+            training_interface.run()
+            
+        except ImportError as e:
+            print(f"{Colors.ERROR}Error: Could not import training system: {e}{Colors.RESET}")
+            print(f"{Colors.INFO}Make sure train.py is in the scripts directory.{Colors.RESET}")
+        except Exception as e:
+            print(f"{Colors.ERROR}Error launching training: {e}{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+
     def run(self) -> None:
         """Main game loop."""
         print("Starting Connect4 Interactive Game Interface...")
@@ -402,8 +429,8 @@ class GameInterface:
             self.display_main_menu()
 
             choice = self.get_user_choice(
-                f"{Colors.INFO}Enter your choice (1-5): {Colors.RESET}",
-                ["1", "2", "3", "4", "5"],
+                f"{Colors.INFO}Enter your choice (1-6): {Colors.RESET}",
+                ["1", "2", "3", "4", "5", "6"],
             )
 
             if choice == "1":
@@ -413,8 +440,10 @@ class GameInterface:
             elif choice == "3":
                 self.play_human_vs_ai()
             elif choice == "4":
-                self.view_statistics()
+                self.start_training()
             elif choice == "5":
+                self.view_statistics()
+            elif choice == "6":
                 print(
                     f"{Colors.SUCCESS}Thanks for playing Connect4! "
                     f"Goodbye!{Colors.RESET}"
