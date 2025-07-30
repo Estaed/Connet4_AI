@@ -204,8 +204,9 @@ class PPOAgent(BaseAgent):
         self.value_loss_coef = self.config.get('ppo.value_loss_coef', 0.5)
         self.entropy_coef = self.config.get('ppo.entropy_coef', 0.01)
         self.max_grad_norm = self.config.get('ppo.max_grad_norm', 0.5)
-        self.ppo_epochs = self.config.get('ppo.ppo_epochs', 4)
-        self.batch_size = self.config.get('ppo.batch_size', 64)
+        self.ppo_epochs = self.config.get('ppo.ppo_epochs', 10)  # Increased for better learning
+        self.batch_size = self.config.get('ppo.batch_size', 32)  # Reduced for more frequent updates
+        self.n_steps = self.config.get('ppo.n_steps', 2048)  # Steps per rollout (stable-baselines3 default)
         self.memory_capacity = self.config.get('ppo.memory_capacity', 10000)
         
         # Training parameters
@@ -518,7 +519,23 @@ class PPOAgent(BaseAgent):
         
         self.logger.debug(f"PPO update completed. Policy loss: {self.training_metrics['policy_loss']:.4f}")
         
-        return self.training_metrics.copy()
+        # Return metrics in stable-baselines3 format
+        metrics = {
+            'policy_loss': total_policy_loss / self.ppo_epochs,
+            'value_loss': total_value_loss / self.ppo_epochs,
+            'entropy_loss': total_entropy_loss / self.ppo_epochs,
+            'total_loss': (total_policy_loss + total_value_loss + total_entropy_loss) / self.ppo_epochs,
+            'clip_fraction': total_clip_fraction / self.ppo_epochs,
+            'kl_divergence': total_kl_div / self.ppo_epochs,
+            'explained_variance': explained_var,
+            'learning_rate': self.scheduler.get_last_lr()[0],
+            'n_updates': self.training_metrics['episodes_trained'] + 1
+        }
+        
+        # Update internal metrics
+        self.training_metrics.update(metrics)
+        
+        return metrics
     
     def _apply_action_mask(self, 
                           logits: torch.Tensor, 

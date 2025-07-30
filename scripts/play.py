@@ -16,12 +16,13 @@ import os
 import time
 import random
 
-# Add utils directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# Add project root to path for imports
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, project_root)
 # Add src directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(project_root, "src"))
 
-from utils.render import (
+from src.utils.render import (
     Colors,
     render_main_menu,
     render_game_mode_header,
@@ -29,11 +30,20 @@ from utils.render import (
     render_game_summary,
     render_statistics,
     render_development_message,
+    render_model_selection_menu,
+    render_model_details,
+    render_human_vs_ai_setup,
+    render_model_browser_menu,
+    render_model_selection_error,
+    render_model_loading_progress,
+    render_model_loaded_success,
 )
 
 try:
     from src.environments.connect4_game import Connect4Game
     from src.agents.random_agent import RandomAgent
+    from src.utils.model_manager import ModelManager
+    from src.utils.checkpointing import CheckpointManager
 except ImportError as e:
     print(f"Error importing Connect4 components: {e}")
     print("Make sure you're running from the project root directory")
@@ -56,6 +66,14 @@ class GameInterface:
             "draws": 0,
             "total_moves": 0,
         }
+        
+        # Initialize model management system
+        try:
+            self.model_manager = ModelManager(models_dir="models", auto_refresh=True)
+            print(f"[GameInterface] Model manager initialized with {len(self.model_manager.get_models())} models")
+        except Exception as e:
+            print(f"Warning: Could not initialize model manager: {e}")
+            self.model_manager = None
 
     def display_main_menu(self) -> None:
         """Display the main menu with game mode options."""
@@ -382,12 +400,188 @@ class GameInterface:
         input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
 
     def play_human_vs_ai(self) -> None:
-        """Play Human vs AI mode (future implementation)."""
-        print(f"\n{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        print(f"{Colors.INFO}{Colors.BOLD}>>> HUMAN vs AI MODE <<<{Colors.RESET}")
-        print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
-        render_development_message("PPO agents", "Coming in Phase 4 of the project...")
-        input(f"{Colors.INFO}Press Enter to return to main menu...{Colors.RESET}")
+        """Play Human vs AI mode with model selection."""
+        if not self.model_manager:
+            render_model_selection_error("Model manager not available")
+            input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+            return
+        
+        # Get available models
+        models = self.model_manager.get_models(sort_by='performance')
+        
+        if not models:
+            render_model_selection_error("No trained models available")
+            input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+            return
+        
+        # Display model selection menu
+        render_model_selection_menu(models, "Select AI Opponent")
+        
+        # Get user's model choice
+        valid_choices = [str(i) for i in range(1, len(models) + 1)] + ['b', 'back']
+        choice = self.get_user_choice(
+            f"\n{Colors.INFO}Select model (1-{len(models)}) or 'b' for back: {Colors.RESET}",
+            valid_choices
+        )
+        
+        if choice.lower() in ['b', 'back']:
+            return
+        
+        # Get selected model
+        model_index = int(choice) - 1
+        selected_model = models[model_index]
+        
+        # Show model details
+        render_model_details(selected_model)
+        
+        # Confirm selection
+        confirm = self.get_user_choice(
+            f"\n{Colors.WARNING}Play against this AI? (y/n): {Colors.RESET}",
+            ['y', 'n', 'yes', 'no']
+        ).lower()
+        
+        if confirm in ['n', 'no']:
+            print(f"{Colors.INFO}Model selection cancelled.{Colors.RESET}")
+            input(f"{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+            return
+        
+        # Load the selected model
+        render_model_loading_progress(selected_model.name)
+        
+        try:
+            ai_agent = self.model_manager.load_model_for_gameplay(selected_model.name)
+            
+            if not ai_agent:
+                render_model_selection_error(f"Failed to load model: {selected_model.name}")
+                input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+                return
+            
+            # Show successful loading
+            model_info = {
+                'episode': selected_model.episode,
+                'win_rate': selected_model.win_rate,
+                'skill_level': selected_model.get_skill_level()
+            }
+            render_model_loaded_success(selected_model.name, model_info)
+            
+            # Show game setup
+            render_human_vs_ai_setup(selected_model.to_dict())
+            
+            input(f"\n{Colors.WARNING}Press Enter to start the game...{Colors.RESET}")
+            
+            # Play the game
+            self._play_human_vs_ai_game(ai_agent, selected_model)
+            
+        except Exception as e:
+            render_model_selection_error(f"Error loading model: {str(e)}")
+            input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+    
+    def _play_human_vs_ai_game(self, ai_agent, model_metadata) -> None:
+        """Play a human vs AI game."""
+        # Initialize game with human starting first
+        self.game.reset()
+        self.game.current_player = 1  # Human starts (Player X)
+        game_start_time = time.time()
+        
+        print(f"\n{Colors.SUCCESS}🎮 Starting Human vs AI Game!{Colors.RESET}")
+        print(f"{Colors.INFO}AI Opponent: {model_metadata.get_display_name()} ({model_metadata.get_skill_level()}){Colors.RESET}")
+        
+        # Game loop
+        while not self.game.game_over:
+            # Render current state
+            self.game.render(show_stats=True)
+            
+            if self.game.current_player == 1:  # Human turn
+                player_symbol = "X"
+                print(f"\n{Colors.PLAYER1}Your turn (Player {player_symbol})!{Colors.RESET}")
+                
+                # Get human input
+                col = self.get_column_input(player_symbol)
+                
+                if col == -1:  # Player quit
+                    print(f"{Colors.WARNING}Game ended by human player.{Colors.RESET}")
+                    input(f"{Colors.INFO}Press Enter to return to main menu...{Colors.RESET}")
+                    return
+                
+                # Make human move
+                if not self.game.drop_piece(col):
+                    print(f"{Colors.ERROR}Invalid move! Please try again.{Colors.RESET}")
+                    input(f"{Colors.INFO}Press Enter to continue...{Colors.RESET}")
+                    continue
+                
+                print(f"{Colors.SUCCESS}You placed your piece in column {col + 1}!{Colors.RESET}")
+                
+            else:  # AI turn
+                player_symbol = "O"
+                print(f"\n{Colors.PLAYER2}AI turn (Player {player_symbol})...{Colors.RESET}")
+                
+                # Get AI action
+                try:
+                    # Convert board to format expected by agent
+                    # The AI expects the board from its perspective (it's player -1)
+                    ai_observation = self.game.board.copy()
+                    valid_actions = self.game.get_valid_moves()
+                    
+                    # Get AI action
+                    ai_action = ai_agent.get_action(ai_observation, valid_actions)
+                    
+                    print(f"{Colors.INFO}🤖 AI is thinking...{Colors.RESET}")
+                    time.sleep(0.5)  # Brief pause for dramatic effect
+                    
+                    # Make AI move
+                    if ai_action in valid_actions and self.game.drop_piece(ai_action):
+                        print(f"{Colors.SUCCESS}AI placed its piece in column {ai_action + 1}!{Colors.RESET}")
+                    else:
+                        print(f"{Colors.ERROR}AI made invalid move! Using random fallback.{Colors.RESET}")
+                        # Fallback to random valid move
+                        fallback_action = random.choice(valid_actions)
+                        self.game.drop_piece(fallback_action)
+                        print(f"{Colors.INFO}AI placed piece in column {fallback_action + 1} (random).{Colors.RESET}")
+                    
+                except Exception as e:
+                    print(f"{Colors.ERROR}AI error: {e}. Using random move.{Colors.RESET}")
+                    valid_actions = self.game.get_valid_moves()
+                    fallback_action = random.choice(valid_actions)
+                    self.game.drop_piece(fallback_action)
+                    print(f"{Colors.INFO}AI placed piece in column {fallback_action + 1} (random).{Colors.RESET}")
+                
+            # Brief pause between moves
+            time.sleep(0.3)
+        
+        # Game over - show final state
+        self.game.render(show_stats=True)
+        
+        # Update statistics
+        game_time = time.time() - game_start_time
+        self.stats["games_played"] += 1
+        self.stats["total_moves"] += self.game.move_count
+        
+        # Determine result and update stats
+        if self.game.winner == 1:
+            self.stats["player1_wins"] += 1
+            result_msg = f"{Colors.SUCCESS}🏆 Congratulations! You beat the AI!{Colors.RESET}"
+        elif self.game.winner == -1:
+            self.stats["player2_wins"] += 1
+            result_msg = f"{Colors.ERROR}🤖 AI wins! Better luck next time!{Colors.RESET}"
+        else:
+            self.stats["draws"] += 1
+            result_msg = f"{Colors.WARNING}🤝 It's a draw! Great game!{Colors.RESET}"
+        
+        print(f"\n{result_msg}")
+        
+        # Show game summary
+        render_game_summary(game_time, self.game.move_count)
+        
+        # Ask if player wants to play again with same AI
+        play_again = self.get_user_choice(
+            f"\n{Colors.INFO}Play again with same AI? (y/n): {Colors.RESET}",
+            ['y', 'n', 'yes', 'no']
+        ).lower()
+        
+        if play_again in ['y', 'yes']:
+            self._play_human_vs_ai_game(ai_agent, model_metadata)
+        else:
+            input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
 
     def view_statistics(self) -> None:
         """Display game statistics."""
@@ -420,6 +614,249 @@ class GameInterface:
             print(f"{Colors.ERROR}Error launching training: {e}{Colors.RESET}")
         
         input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+    
+    def manage_models(self) -> None:
+        """Model management interface."""
+        if not self.model_manager:
+            render_model_selection_error("Model manager not available")
+            input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+            return
+        
+        while True:
+            render_model_browser_menu()
+            
+            choice = self.get_user_choice(
+                f"{Colors.INFO}Enter your choice (1-7): {Colors.RESET}",
+                ["1", "2", "3", "4", "5", "6", "7"]
+            )
+            
+            if choice == "1":
+                self._browse_all_models()
+            elif choice == "2":
+                self._show_model_details()
+            elif choice == "3":
+                self._validate_models()
+            elif choice == "4":
+                self._delete_models()
+            elif choice == "5":
+                self._show_model_statistics()
+            elif choice == "6":
+                self._export_model()
+            elif choice == "7":
+                break
+    
+    def _browse_all_models(self) -> None:
+        """Browse all available models."""
+        models = self.model_manager.get_models(sort_by='performance')
+        
+        if not models:
+            render_model_selection_error("No models found")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        render_model_selection_menu(models, "All Available Models")
+        
+        # Option to view details
+        print(f"\n{Colors.INFO}Options:{Colors.RESET}")
+        print(f"{Colors.SUCCESS}d <number>{Colors.RESET} - View details (e.g., 'd 1')")
+        print(f"{Colors.WARNING}b{Colors.RESET} - Back to model management")
+        
+        choice = input(f"\n{Colors.INFO}Enter choice: {Colors.RESET}").strip().lower()
+        
+        if choice.startswith('d '):
+            try:
+                model_num = int(choice.split()[1])
+                if 1 <= model_num <= len(models):
+                    render_model_details(models[model_num - 1])
+                    input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+                else:
+                    print(f"{Colors.ERROR}Invalid model number{Colors.RESET}")
+                    input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            except (ValueError, IndexError):
+                print(f"{Colors.ERROR}Invalid format. Use 'd <number>'{Colors.RESET}")
+                input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _show_model_details(self) -> None:
+        """Show detailed information for a specific model."""
+        models = self.model_manager.get_models()
+        
+        if not models:
+            render_model_selection_error("No models found")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        render_model_selection_menu(models, "Select Model for Details")
+        
+        valid_choices = [str(i) for i in range(1, len(models) + 1)] + ['b', 'back']
+        choice = self.get_user_choice(
+            f"\n{Colors.INFO}Select model (1-{len(models)}) or 'b' for back: {Colors.RESET}",
+            valid_choices
+        )
+        
+        if choice.lower() in ['b', 'back']:
+            return
+        
+        model_index = int(choice) - 1
+        selected_model = models[model_index]
+        
+        render_model_details(selected_model)
+        
+        # Show validation info
+        validation_result = self.model_manager.validate_model(selected_model.name)
+        
+        print(f"\n{Colors.INFO}{Colors.BOLD}[VALIDATION RESULTS]{Colors.RESET}")
+        if validation_result['valid']:
+            print(f"Status: {Colors.SUCCESS}Valid{Colors.RESET}")
+        else:
+            print(f"Status: {Colors.ERROR}Invalid{Colors.RESET}")
+        
+        if validation_result['errors']:
+            print(f"Errors: {Colors.ERROR}{', '.join(validation_result['errors'])}{Colors.RESET}")
+        
+        if validation_result['warnings']:
+            print(f"Warnings: {Colors.WARNING}{', '.join(validation_result['warnings'])}{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _validate_models(self) -> None:
+        """Validate all models."""
+        models = self.model_manager.get_models()
+        
+        if not models:
+            render_model_selection_error("No models found")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.BOLD}{Colors.INFO}>>> MODEL VALIDATION RESULTS <<<{Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        
+        valid_count = 0
+        invalid_count = 0
+        
+        for i, model in enumerate(models, 1):
+            print(f"\n{Colors.INFO}Validating {i}/{len(models)}: {model.name}{Colors.RESET}")
+            
+            validation_result = self.model_manager.validate_model(model.name)
+            
+            if validation_result['valid']:
+                print(f"  Status: {Colors.SUCCESS}✅ Valid{Colors.RESET}")
+                valid_count += 1
+            else:
+                print(f"  Status: {Colors.ERROR}❌ Invalid{Colors.RESET}")
+                if validation_result['errors']:
+                    print(f"  Errors: {Colors.ERROR}{', '.join(validation_result['errors'])}{Colors.RESET}")
+                invalid_count += 1
+            
+            if validation_result['warnings']:
+                print(f"  Warnings: {Colors.WARNING}{', '.join(validation_result['warnings'])}{Colors.RESET}")
+        
+        print(f"\n{Colors.INFO}{Colors.BOLD}[VALIDATION SUMMARY]{Colors.RESET}")
+        print(f"Total models: {Colors.INFO}{len(models)}{Colors.RESET}")
+        print(f"Valid models: {Colors.SUCCESS}{valid_count}{Colors.RESET}")
+        print(f"Invalid models: {Colors.ERROR}{invalid_count}{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _delete_models(self) -> None:
+        """Delete models interface."""
+        models = self.model_manager.get_models()
+        
+        if not models:
+            render_model_selection_error("No models found")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        print(f"\n{Colors.ERROR}{Colors.BOLD}⚠️  MODEL DELETION ⚠️{Colors.RESET}")
+        print(f"{Colors.WARNING}This will permanently delete the selected model file.{Colors.RESET}")
+        
+        render_model_selection_menu(models, "Select Model to Delete")
+        
+        valid_choices = [str(i) for i in range(1, len(models) + 1)] + ['b', 'back']
+        choice = self.get_user_choice(
+            f"\n{Colors.INFO}Select model (1-{len(models)}) or 'b' for back: {Colors.RESET}",
+            valid_choices
+        )
+        
+        if choice.lower() in ['b', 'back']:
+            return
+        
+        model_index = int(choice) - 1
+        selected_model = models[model_index]
+        
+        # Show model details before deletion
+        render_model_details(selected_model)
+        
+        # Double confirmation
+        confirm1 = self.get_user_choice(
+            f"\n{Colors.ERROR}Are you sure you want to delete this model? (yes/no): {Colors.RESET}",
+            ['yes', 'no']
+        ).lower()
+        
+        if confirm1 != 'yes':
+            print(f"{Colors.INFO}Deletion cancelled.{Colors.RESET}")
+            input(f"{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        confirm2 = self.get_user_choice(
+            f"{Colors.ERROR}Final confirmation - Delete {selected_model.name}? (DELETE/cancel): {Colors.RESET}",
+            ['DELETE', 'cancel']
+        )
+        
+        if confirm2 != 'DELETE':
+            print(f"{Colors.INFO}Deletion cancelled.{Colors.RESET}")
+            input(f"{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        # Delete the model
+        if self.model_manager.delete_model(selected_model.name):
+            print(f"{Colors.SUCCESS}✅ Model deleted successfully: {selected_model.name}{Colors.RESET}")
+        else:
+            print(f"{Colors.ERROR}❌ Failed to delete model: {selected_model.name}{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _show_model_statistics(self) -> None:
+        """Show overall model statistics."""
+        stats = self.model_manager.get_statistics()
+        
+        print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.BOLD}{Colors.INFO}>>> MODEL STATISTICS <<<{Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        
+        print(f"\n{Colors.INFO}{Colors.BOLD}[OVERVIEW]{Colors.RESET}")
+        print(f"Total models:     {Colors.WARNING}{stats['total_models']}{Colors.RESET}")
+        print(f"Best models:      {Colors.SUCCESS}{stats['best_models']}{Colors.RESET}")
+        print(f"Average win rate: {Colors.WARNING}{stats['avg_win_rate']:.1f}%{Colors.RESET}")
+        print(f"Total storage:    {Colors.INFO}{stats['total_size_mb']:.1f} MB{Colors.RESET}")
+        print(f"Models directory: {Colors.INFO}{stats['models_dir']}{Colors.RESET}")
+        
+        # Performance distribution
+        perf_dist = stats.get('performance_distribution', {})
+        if perf_dist and any(perf_dist.values()):
+            print(f"\n{Colors.INFO}{Colors.BOLD}[SKILL LEVEL DISTRIBUTION]{Colors.RESET}")
+            for level, count in perf_dist.items():
+                if count > 0:
+                    if level in ['Expert', 'Advanced']:
+                        color = Colors.SUCCESS
+                    elif level == 'Intermediate':
+                        color = Colors.WARNING
+                    else:
+                        color = Colors.ERROR
+                    print(f"{level:12} {color}{count:3} models{Colors.RESET}")
+        
+        # Latest model info
+        if stats['latest_model_episode'] > 0:
+            print(f"\n{Colors.INFO}{Colors.BOLD}[LATEST MODEL]{Colors.RESET}")
+            print(f"Latest episode:   {Colors.INFO}{stats['latest_model_episode']:,}{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _export_model(self) -> None:
+        """Export model (placeholder for future implementation)."""
+        print(f"\n{Colors.INFO}Model export functionality will be implemented in a future update.{Colors.RESET}")
+        print(f"{Colors.INFO}For now, you can manually copy .pt files from the models/ directory.{Colors.RESET}")
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
 
     def run(self) -> None:
         """Main game loop."""
@@ -429,8 +866,8 @@ class GameInterface:
             self.display_main_menu()
 
             choice = self.get_user_choice(
-                f"{Colors.INFO}Enter your choice (1-6): {Colors.RESET}",
-                ["1", "2", "3", "4", "5", "6"],
+                f"{Colors.INFO}Enter your choice (1-7): {Colors.RESET}",
+                ["1", "2", "3", "4", "5", "6", "7"],
             )
 
             if choice == "1":
@@ -442,8 +879,10 @@ class GameInterface:
             elif choice == "4":
                 self.start_training()
             elif choice == "5":
-                self.view_statistics()
+                self.manage_models()
             elif choice == "6":
+                self.view_statistics()
+            elif choice == "7":
                 print(
                     f"{Colors.SUCCESS}Thanks for playing Connect4! "
                     f"Goodbye!{Colors.RESET}"

@@ -22,6 +22,7 @@ import os
 import time
 import random
 from typing import Dict, Any, Optional, Tuple
+from pathlib import Path
 import numpy as np
 
 # Try to import tqdm for progress bars
@@ -31,11 +32,13 @@ try:
 except ImportError:
     TQDM_AVAILABLE = False
 
+# Add project root to path for imports
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, project_root)
 # Add src directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(project_root, "src"))
 
-from utils.render import (
+from src.utils.render import (
     Colors,
     render_training_menu,
     render_training_header,
@@ -49,6 +52,8 @@ try:
     from src.environments.connect4_env import Connect4Env
     from src.agents.ppo_agent import PPOAgent
     from src.core.config import get_config
+    from src.utils.checkpointing import CheckpointManager
+    from src.utils.logging_utils import TrainingLogger, LogLevel
     import torch
 except ImportError as e:
     print(f"Error importing Connect4 components: {e}")
@@ -89,6 +94,14 @@ class TrainingStatistics:
             'training_time': 0.0,
             'eta': 0.0,
             'start_time': time.time()
+        }
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert statistics to dictionary for checkpointing."""
+        return {
+            'win_stats': self.win_stats.copy(),
+            'ppo_metrics': self.ppo_metrics.copy(),
+            'performance_stats': self.performance_stats.copy()
         }
     
     def update_game_result(self, winner: int, moves: int):
@@ -158,13 +171,32 @@ class SingleEnvTrainer:
         # Training statistics
         self.stats = TrainingStatistics()
         
-        # Training parameters (optimized for speed)
-        self.update_frequency = config.get('training.update_frequency', 5)  # More frequent updates
+        # Training parameters (optimized for stable learning)
+        self.update_frequency = config.get('training.update_frequency', 10)  # Update every 10 episodes
         self.render_frequency = config.get('training.render_frequency', 1)
         self.progress_frequency = config.get('training.progress_frequency', 10)  # Much more frequent progress updates
+        self.rollout_buffer = []  # Store experiences for rollout-based training
         
-        # Placeholder for Task 5.2 checkpoint system
-        self.checkpoint_manager = None  # Will be implemented in Task 5.2
+        # Checkpoint and logging system (Task 5.2)
+        # Use level-based folder structure for better organization
+        base_checkpoint_dir = "models"
+        self.checkpoint_manager = CheckpointManager(
+            checkpoint_dir=base_checkpoint_dir,
+            max_checkpoints=5,
+            auto_save_frequency=1000,
+            model_name_prefix="connect4_ppo"
+        )
+        
+        # Training logger with TensorBoard
+        experiment_name = f"connect4_training_{int(time.time())}"
+        self.logger = TrainingLogger(
+            experiment_name=experiment_name,
+            log_level=LogLevel.NORMAL,
+            enable_tensorboard=True
+        )
+        
+        self.logger.info(f"SingleEnvTrainer initialized for device: {self.device}")
+        self.logger.info(f"Checkpoint auto-save frequency: {self.checkpoint_manager.auto_save_frequency} episodes")
     
     def _get_device(self) -> str:
         """Determine training device (GPU if available, CPU otherwise)."""
@@ -191,6 +223,13 @@ class SingleEnvTrainer:
         Returns:
             Dictionary with final training results
         """
+        # Create level-specific checkpoint directory
+        level_checkpoint_dir = Path("models") / level_name.lower()
+        level_checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Update checkpoint manager for this training level
+        self.checkpoint_manager.checkpoint_dir = level_checkpoint_dir
+        self.checkpoint_manager._discover_existing_checkpoints()
         # Display training header
         render_training_header(level_name, total_episodes, num_envs=1)
         
@@ -218,20 +257,51 @@ class SingleEnvTrainer:
                 episode_result['moves']
             )
             
-            # Update agent periodically
-            if episode % self.update_frequency == 0:
-                ppo_metrics = self._update_agent(episode_result['experiences'])
-                self.stats.update_ppo_metrics(ppo_metrics)
+            # Store experiences in rollout buffer
+            self.rollout_buffer.extend(episode_result['experiences'])
+            
+            # Update agent periodically (stable-baselines3 style rollout)
+            if episode % self.update_frequency == 0 and len(self.rollout_buffer) > 0:
+                ppo_metrics = self._update_agent(self.rollout_buffer)
+                
+                # Check if update was successful
+                if not ppo_metrics.get('insufficient_data', False):
+                    self.stats.update_ppo_metrics(ppo_metrics)
+                    
+                    # Log training metrics to TensorBoard
+                    self.logger.log_training_metrics(episode, ppo_metrics, "ppo")
+                    
+                    print(f"{Colors.SUCCESS}Training update at episode {episode}: Loss={ppo_metrics.get('policy_loss', 0):.4f}{Colors.RESET}")
+                
+                # Clear rollout buffer after update attempt
+                self.rollout_buffer.clear()
             
             # Update performance statistics
             self.stats.update_performance_stats(episode, total_episodes)
             
+            # Log comprehensive training progress periodically
+            if episode % 100 == 0:
+                self.logger.log_training_progress_summary(
+                    episode=episode,
+                    total_episodes=total_episodes,
+                    win_stats=self.stats.win_stats,
+                    ppo_metrics=self.stats.ppo_metrics,
+                    performance_stats=self.stats.performance_stats
+                )
+                
+                # Display comprehensive training metrics every 100 episodes (stable-baselines3 style)
+                if not TQDM_AVAILABLE and episode % 100 == 0:
+                    self._display_training_metrics(episode, total_episodes)
+            
             # Update tqdm progress bar if available
             if TQDM_AVAILABLE and isinstance(episode_range, tqdm):
+                win_rate = (self.stats.win_stats['player1_wins']/max(1, self.stats.win_stats['total_games']))*100
                 episode_range.set_postfix({
-                    'Win%': f"{(self.stats.win_stats['player1_wins']/max(1, self.stats.win_stats['total_games']))*100:.1f}",
+                    'Win%': f"{win_rate:.1f}",
                     'Games': self.stats.win_stats['total_games'],
-                    'EPS': f"{self.stats.performance_stats['episodes_per_sec']:.1f}"
+                    'EPS': f"{self.stats.performance_stats['episodes_per_sec']:.1f}",
+                    'Loss': f"{self.stats.ppo_metrics['policy_loss']:.4f}",
+                    'Reward': f"{self.stats.ppo_metrics['avg_reward']:.3f}"
                 })
             
             # Display detailed progress periodically (only if no tqdm)
@@ -245,13 +315,86 @@ class SingleEnvTrainer:
                     performance_stats=self.stats.performance_stats
                 )
             
-            # Placeholder for Task 5.2: Save checkpoint periodically
-            if self.checkpoint_manager and episode % 1000 == 0:
-                # self.checkpoint_manager.save_checkpoint(self.agent, episode, self.stats)
-                pass
+            # Checkpoint management (Task 5.2)
+            # Try auto-save first
+            auto_save_path = self.checkpoint_manager.trigger_auto_save(
+                agent=self.agent,
+                optimizer=getattr(self.agent, 'optimizer', None),
+                episode=episode,
+                training_stats=self.stats.win_stats,
+                training_metrics=self.stats.ppo_metrics
+            )
+            
+            if auto_save_path:
+                self.logger.info(f"Auto-saved checkpoint at episode {episode}: {Path(auto_save_path).name}")
+            
+            # Save best model if performance is good
+            if (episode > 1000 and episode % 5000 == 0 and 
+                self.stats.win_stats.get('total_games', 0) > 100):
+                
+                current_win_rate = (self.stats.win_stats.get('player1_wins', 0) / 
+                                  max(1, self.stats.win_stats.get('total_games', 1))) * 100
+                
+                if current_win_rate > 60:  # Save as best if win rate > 60%
+                    best_path = self.checkpoint_manager.save_checkpoint(
+                        agent=self.agent,
+                        optimizer=getattr(self.agent, 'optimizer', None),
+                        episode=episode,
+                        training_stats=self.stats.win_stats,
+                        training_metrics=self.stats.ppo_metrics,
+                        checkpoint_name=f"best_connect4_ppo_ep_{episode}_wr_{current_win_rate:.1f}.pt",
+                        is_best=True
+                    )
+                    self.logger.info(f"Saved best model (WR: {current_win_rate:.1f}%): {Path(best_path).name}")
         
-        # Training completed
+        # Training completed - final checkpoint and logging
         final_results = self._get_final_results(level_name, total_episodes)
+        
+        # Save final checkpoint
+        final_checkpoint_path = self.checkpoint_manager.save_checkpoint(
+            agent=self.agent,
+            optimizer=getattr(self.agent, 'optimizer', None),
+            episode=total_episodes,
+            training_stats=self.stats.win_stats,
+            training_metrics=self.stats.ppo_metrics,
+            checkpoint_name=f"final_{level_name.lower()}_training_ep_{total_episodes}.pt",
+            additional_data={
+                'training_level': level_name,
+                'training_complete': True,
+                'final_results': final_results
+            }
+        )
+        
+        self.logger.info(f"Final checkpoint saved: {Path(final_checkpoint_path).name}")
+        
+        # Log training completion
+        self.logger.log_training_completion(
+            total_episodes=total_episodes,
+            total_time=self.stats.performance_stats['training_time'],
+            final_win_stats=self.stats.win_stats,
+            final_metrics=self.stats.ppo_metrics
+        )
+        
+        # Log model architecture to TensorBoard (if not done already)
+        if hasattr(self.agent, 'network'):
+            self.logger.log_model_architecture(self.agent.network)
+        
+        # Log hyperparameters
+        hparams = {
+            'training_level': level_name,
+            'total_episodes': total_episodes,
+            'update_frequency': self.update_frequency,
+            'device': self.device
+        }
+        
+        final_metrics = {
+            'final_win_rate': (self.stats.win_stats.get('player1_wins', 0) / 
+                             max(1, self.stats.win_stats.get('total_games', 1))) * 100,
+            'final_avg_reward': self.stats.ppo_metrics.get('avg_reward', 0),
+            'total_games': self.stats.win_stats.get('total_games', 0)
+        }
+        
+        self.logger.log_hyperparameters(hparams, final_metrics)
         
         # Show final detailed progress if using tqdm
         if TQDM_AVAILABLE:
@@ -273,6 +416,16 @@ class SingleEnvTrainer:
             final_win_stats=self.stats.win_stats,
             final_metrics=self.stats.ppo_metrics
         )
+        
+        # Display checkpoint information
+        print(f"\n{Colors.INFO}📁 Training artifacts saved:{Colors.RESET}")
+        print(f"  Final checkpoint: {level_name.lower()}/{Path(final_checkpoint_path).name}")
+        print(f"  Checkpoint folder: models/{level_name.lower()}/")
+        print(f"  TensorBoard logs: logs/tensorboard/{self.logger.experiment_name}")
+        print(f"  View training graphs: tensorboard --logdir logs/tensorboard")
+        
+        # Close logger
+        self.logger.close()
         
         return final_results
     
@@ -370,32 +523,213 @@ class SingleEnvTrainer:
                     valid_actions=list(range(7))  # Simplified - could be improved
                 )
             
-            # Update agent using stored experiences
-            update_metrics = self.agent.update()
+            # Check if we have enough experiences for training
+            memory_size = len(self.agent.memory)
+            batch_size = getattr(self.agent, 'batch_size', 64)
             
-            # Clear memory after update
-            self.agent.memory.clear()
+            print(f"{Colors.INFO}Memory size: {memory_size}, Batch size required: {batch_size}{Colors.RESET}")
             
-            return update_metrics
+            if memory_size >= batch_size:
+                # Update agent using stored experiences
+                update_metrics = self.agent.update()
+                print(f"{Colors.SUCCESS}PPO update completed successfully!{Colors.RESET}")
+                return update_metrics
+            else:
+                print(f"{Colors.WARNING}Not enough experiences for training (need {batch_size}, have {memory_size}){Colors.RESET}")
+                # Return current metrics without update
+                return {
+                    'policy_loss': 0.0,
+                    'value_loss': 0.0,
+                    'total_loss': 0.0,
+                    'avg_reward': np.mean([exp['reward'] for exp in experiences]) if experiences else 0.0,
+                    'entropy': 0.0,
+                    'insufficient_data': True
+                }
             
         except Exception as e:
             print(f"{Colors.WARNING}PPO update failed: {e}. Using placeholder metrics.{Colors.RESET}")
+            print(f"{Colors.ERROR}⚠️  WARNING: Training may not be effective without proper PPO updates!{Colors.RESET}")
             
             # Fallback to placeholder metrics if PPO update fails
-            policy_loss = random.uniform(0.001, 0.1)
+            # Make them obviously fake so user knows there's an issue
+            policy_loss = random.uniform(0.001, 0.1) 
             value_loss = random.uniform(0.001, 0.1)
             entropy = random.uniform(0.01, 0.1)
             
             total_loss = policy_loss + value_loss
             avg_reward = np.mean([exp['reward'] for exp in experiences]) if experiences else 0.0
             
-            return {
+            # Add warning flag to metrics
+            metrics = {
                 'policy_loss': policy_loss,
                 'value_loss': value_loss,
                 'total_loss': total_loss,
                 'avg_reward': avg_reward,
-                'entropy': entropy
+                'entropy': entropy,
+                'placeholder_metrics': True  # Flag to indicate these are fake
             }
+            
+            return metrics
+    
+    def _display_training_metrics(self, episode: int, total_episodes: int) -> None:
+        """Display comprehensive training metrics in stable-baselines3 style."""
+        # Calculate progress percentage
+        progress = (episode / total_episodes) * 100
+        
+        # Get current stats
+        current_win_rate = (self.stats.win_stats['player1_wins']/max(1, self.stats.win_stats['total_games']))*100
+        total_games = self.stats.win_stats['total_games']
+        avg_game_length = self.stats.win_stats['avg_game_length']
+        
+        # PPO metrics
+        policy_loss = self.stats.ppo_metrics['policy_loss']
+        value_loss = self.stats.ppo_metrics['value_loss']
+        total_loss = self.stats.ppo_metrics['total_loss']
+        avg_reward = self.stats.ppo_metrics['avg_reward']
+        entropy = self.stats.ppo_metrics['entropy']
+        updates_count = self.stats.ppo_metrics['updates_count']
+        
+        # Performance metrics
+        eps = self.stats.performance_stats['episodes_per_sec']
+        training_time = self.stats.performance_stats['training_time']
+        eta = self.stats.performance_stats['eta']
+        
+        # Display metrics table (stable-baselines3 style)
+        print(f"\n{'-'*50}")
+        print(f"| {'rollout/':<20} | {'':>8} |")
+        print(f"|    {'ep_len_mean':<16} | {avg_game_length:>8.1f} |")
+        print(f"|    {'ep_rew_mean':<16} | {avg_reward:>8.3f} |")
+        print(f"|    {'win_rate':<16} | {current_win_rate:>8.1f} |")
+        print(f"| {'time/':<20} | {'':>8} |")
+        print(f"|    {'episodes':<16} | {episode:>8,} |")
+        print(f"|    {'fps':<16} | {eps:>8.1f} |")
+        print(f"|    {'time_elapsed':<16} | {int(training_time):>8} |")
+        print(f"|    {'total_games':<16} | {total_games:>8,} |")
+        
+        # Show training metrics if available
+        if updates_count > 0 and not self.stats.ppo_metrics.get('insufficient_data', False):
+            print(f"| {'train/':<20} | {'':>8} |")
+            print(f"|    {'policy_loss':<16} | {policy_loss:>8.4f} |")
+            print(f"|    {'value_loss':<16} | {value_loss:>8.4f} |")
+            print(f"|    {'total_loss':<16} | {total_loss:>8.4f} |")
+            print(f"|    {'entropy':<16} | {entropy:>8.4f} |")
+            print(f"|    {'n_updates':<16} | {updates_count:>8} |")
+            print(f"|    {'learning_rate':<16} | {self.stats.ppo_metrics.get('learning_rate', 0):>8.6f} |")
+        else:
+            print(f"| {'train/':<20} | {'':>8} |")
+            print(f"|    {'status':<16} | {'WARMING':>8} |")
+        
+        print(f"{'-'*50}")
+        
+        # Show progress and ETA
+        if eta > 0:
+            eta_min = int(eta // 60)
+            eta_sec = int(eta % 60)
+            print(f"Progress: {progress:.1f}% | ETA: {eta_min}m {eta_sec}s")
+        else:
+            print(f"Progress: {progress:.1f}%")
+        
+        # Add learning progress indicators
+        self._show_learning_indicators(episode, current_win_rate, policy_loss, value_loss, avg_reward)
+    
+    def _show_learning_indicators(self, episode: int, win_rate: float, policy_loss: float, value_loss: float, avg_reward: float) -> None:
+        """Show indicators that help determine if the model is learning or acting randomly."""
+        # Initialize tracking arrays if they don't exist
+        if not hasattr(self, 'win_rate_history'):
+            self.win_rate_history = []
+            self.policy_loss_history = []
+            self.value_loss_history = []
+            self.reward_history = []
+        
+        # Track metrics history
+        self.win_rate_history.append(win_rate)
+        self.policy_loss_history.append(policy_loss)
+        self.value_loss_history.append(value_loss)
+        self.reward_history.append(avg_reward)
+        
+        # Keep only last 10 measurements for trend analysis
+        if len(self.win_rate_history) > 10:
+            self.win_rate_history = self.win_rate_history[-10:]
+            self.policy_loss_history = self.policy_loss_history[-10:]
+            self.value_loss_history = self.value_loss_history[-10:]
+            self.reward_history = self.reward_history[-10:]
+        
+        print(f"\n{Colors.HEADER}=== LEARNING ANALYSIS ==={Colors.RESET}")
+        
+        # Performance Analysis
+        if win_rate > 70:
+            status = f"{Colors.SUCCESS}🎯 EXCELLENT - Strong Strategic Play{Colors.RESET}"
+        elif win_rate > 55:
+            status = f"{Colors.WARNING}📈 GOOD - Above Random Performance{Colors.RESET}"
+        elif win_rate > 45:
+            status = f"{Colors.INFO}⚖️  LEARNING - Near Random (50% baseline){Colors.RESET}"
+        else:
+            status = f"{Colors.ERROR}🎲 POOR - Below Random Performance{Colors.RESET}"
+        
+        print(f"Performance Status: {status}")
+        
+        # Trend Analysis (if we have enough data)
+        if len(self.win_rate_history) >= 3:
+            # Calculate trends
+            recent_win_rates = self.win_rate_history[-3:]
+            recent_losses = self.policy_loss_history[-3:]
+            
+            win_rate_trend = "📈 IMPROVING" if recent_win_rates[-1] > recent_win_rates[0] else "📉 DECLINING" if recent_win_rates[-1] < recent_win_rates[0] else "📊 STABLE"
+            loss_trend = "📉 DECREASING" if recent_losses[-1] < recent_losses[0] else "📈 INCREASING" if recent_losses[-1] > recent_losses[0] else "📊 STABLE"
+            
+            print(f"Win Rate Trend: {Colors.INFO}{win_rate_trend}{Colors.RESET}")
+            print(f"Policy Loss Trend: {Colors.INFO}{loss_trend}{Colors.RESET}")
+        
+        # Learning Quality Indicators
+        learning_indicators = []
+        
+        # Check for placeholder metrics warning
+        if hasattr(self.stats.ppo_metrics, 'get') and self.stats.ppo_metrics.get('placeholder_metrics', False):
+            learning_indicators.append(f"{Colors.ERROR}⚠️  Using placeholder metrics - PPO training may be broken!{Colors.RESET}")
+        elif hasattr(self.stats.ppo_metrics, 'get') and self.stats.ppo_metrics.get('insufficient_data', False):
+            learning_indicators.append(f"{Colors.WARNING}📊 Collecting data - PPO updates will start soon{Colors.RESET}")
+        
+        # Check if significantly better than random
+        if win_rate > 55:
+            learning_indicators.append(f"{Colors.SUCCESS}✓ Outperforming random play{Colors.RESET}")
+        elif win_rate < 45:
+            learning_indicators.append(f"{Colors.ERROR}✗ Underperforming random play{Colors.RESET}")
+        else:
+            learning_indicators.append(f"{Colors.WARNING}? Performance similar to random{Colors.RESET}")
+        
+        # Check loss convergence
+        if policy_loss < 0.1 and value_loss < 0.1:
+            learning_indicators.append(f"{Colors.SUCCESS}✓ Losses converging (good){Colors.RESET}")
+        elif policy_loss > 1.0 or value_loss > 1.0:
+            learning_indicators.append(f"{Colors.ERROR}✗ High losses (unstable learning){Colors.RESET}")
+        else:
+            learning_indicators.append(f"{Colors.INFO}~ Moderate losses (learning in progress){Colors.RESET}")
+        
+        # Check reward progression
+        if avg_reward > 0.1:
+            learning_indicators.append(f"{Colors.SUCCESS}✓ Positive average rewards{Colors.RESET}")
+        elif avg_reward < -0.1:
+            learning_indicators.append(f"{Colors.ERROR}✗ Negative average rewards{Colors.RESET}")
+        else:
+            learning_indicators.append(f"{Colors.WARNING}~ Near-zero rewards (exploration phase){Colors.RESET}")
+        
+        # Display learning indicators
+        for indicator in learning_indicators:
+            print(f"  {indicator}")
+        
+        # Overall learning assessment
+        print(f"\n{Colors.HEADER}Learning Assessment:{Colors.RESET}")
+        if win_rate > 60 and policy_loss < 0.5:
+            assessment = f"{Colors.SUCCESS}🧠 MODEL IS LEARNING EFFECTIVELY{Colors.RESET}"
+        elif win_rate > 50 and len(self.win_rate_history) >= 3 and self.win_rate_history[-1] > self.win_rate_history[0]:
+            assessment = f"{Colors.WARNING}📚 MODEL IS IMPROVING (Give it more time){Colors.RESET}"
+        elif episode < 1000:
+            assessment = f"{Colors.INFO}🌱 EARLY TRAINING (Need more episodes to assess){Colors.RESET}"
+        else:
+            assessment = f"{Colors.ERROR}🎯 MODEL MAY NEED HYPERPARAMETER TUNING{Colors.RESET}"
+        
+        print(f"  {assessment}")
+        print()
     
     def _get_final_results(self, level_name: str, total_episodes: int) -> Dict[str, Any]:
         """Get final training results summary."""
@@ -405,7 +739,9 @@ class SingleEnvTrainer:
             'total_time': self.stats.performance_stats['training_time'],
             'win_stats': self.stats.win_stats.copy(),
             'final_metrics': self.stats.ppo_metrics.copy(),
-            'performance_stats': self.stats.performance_stats.copy()
+            'performance_stats': self.stats.performance_stats.copy(),
+            'checkpoint_manager_stats': self.checkpoint_manager.get_statistics(),
+            'experiment_name': getattr(self.logger, 'experiment_name', 'unknown')
         }
 
 
@@ -425,28 +761,8 @@ class MultiEnvTrainer(SingleEnvTrainer):
         print(f"{Colors.WARNING}MultiEnvTrainer not yet implemented. Using single environment.{Colors.RESET}")
 
 
-# Placeholder for Task 5.2: Checkpoint Manager
-class CheckpointManager:
-    """
-    Checkpoint management for Task 5.2.
-    
-    This class will handle saving and loading training checkpoints.
-    Currently a placeholder.
-    """
-    
-    def __init__(self, checkpoint_dir: str = "models"):
-        self.checkpoint_dir = checkpoint_dir
-        # TODO: Implement in Task 5.2
-    
-    def save_checkpoint(self, agent, episode: int, stats: TrainingStatistics):
-        """Save training checkpoint - placeholder for Task 5.2."""
-        # TODO: Implement in Task 5.2
-        pass
-    
-    def load_checkpoint(self, agent, checkpoint_path: str):
-        """Load training checkpoint - placeholder for Task 5.2."""
-        # TODO: Implement in Task 5.2
-        pass
+# CheckpointManager is now imported from src.utils.checkpointing
+# Placeholder class removed - Task 5.2 completed
 
 
 class TrainingInterface:
@@ -516,23 +832,23 @@ class TrainingInterface:
         training_configs = {
             '1': {
                 'name': 'Test',
-                'episodes': 100,  # Reduced from 1000 for faster testing
+                'episodes': 1000,  # Quick validation training
                 'description': 'Quick validation training'
             },
             '2': {
                 'name': 'Small', 
-                'episodes': 1000,  # Reduced from 10000 for demo
+                'episodes': 10000,  # Basic learning training
                 'description': 'Basic learning training'
             },
             '3': {
                 'name': 'Medium',
-                'episodes': 5000,  # Reduced from 100000 for demo
-                'description': 'Advanced training (single env for now)'
+                'episodes': 100000,  # Advanced training
+                'description': 'Advanced training'
             },
             '4': {
                 'name': 'Impossible',
-                'episodes': 10000,  # Reduced from 1000000 for demo
-                'description': 'Maximum challenge (single env for now)'
+                'episodes': 1000000,  # Maximum challenge
+                'description': 'Maximum challenge'
             }
         }
         
@@ -568,11 +884,15 @@ class TrainingInterface:
         
         # Run training
         try:
+            # Only show game render for Test level (level '1')
+            show_render = (level == '1')
+            render_interval = max(1, config['episodes'] // 10) if show_render else config['episodes'] + 1
+            
             results = self.trainer.train(
                 level_name=config['name'],
                 total_episodes=config['episodes'],
-                show_game_render=True,
-                render_interval=max(1, config['episodes'] // 5)  # Show ~5 games during training (faster)
+                show_game_render=show_render,
+                render_interval=render_interval
             )
             
             print(f"\n{Colors.SUCCESS}Training completed successfully!{Colors.RESET}")
@@ -594,11 +914,15 @@ class TrainingInterface:
             self.display_training_menu()
             
             choice = self.get_user_choice(
-                f"{Colors.INFO}Enter your choice (1-5): {Colors.RESET}",
-                ['1', '2', '3', '4', '5']
+                f"{Colors.INFO}Enter your choice (1-6): {Colors.RESET}",
+                ['1', '2', '3', '4', '5', '6']
             )
             
             if choice == '5':
+                print(f"{Colors.INFO}Training Settings - Coming Soon!{Colors.RESET}")
+                input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+                continue
+            elif choice == '6':
                 print(f"{Colors.SUCCESS}Returning to main menu. Goodbye!{Colors.RESET}")
                 break
             else:
