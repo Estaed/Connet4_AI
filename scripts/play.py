@@ -488,8 +488,9 @@ class GameInterface:
         
         # Game loop
         while not self.game.game_over:
-            # Render current state
-            self.game.render(show_stats=True)
+            # Render current state (show column numbers only for human turns)
+            show_columns = (self.game.current_player == 1)
+            self.game.render(show_stats=True, show_column_numbers=show_columns)
             
             if self.game.current_player == 1:  # Human turn
                 player_symbol = "X"
@@ -548,8 +549,8 @@ class GameInterface:
             # Brief pause between moves
             time.sleep(0.3)
         
-        # Game over - show final state
-        self.game.render(show_stats=True)
+        # Game over - show final state with column numbers for reference
+        self.game.render(show_stats=True, show_column_numbers=True)
         
         # Update statistics
         game_time = time.time() - game_start_time

@@ -368,10 +368,10 @@ def apply_action_mask(self, logits, valid_actions):
 
 ### 🔄 Phase 5: Training Infrastructure
 
-#### Task 5.1: Training Loop Implementation
+#### ✅ Task 5.1: Training Loop Implementation
 **Objective:** Create main training script with self-play  
 **Files:** `scripts/train.py`  
-**Status:** 🔄 **PENDING**
+**Status:** ✅ **COMPLETED**
 
 **Details:**
 - Self-play training loop
@@ -410,10 +410,10 @@ def train_agent():
 
 **Verification:** Training runs without errors and agent improves
 
-#### Task 5.2: Model Checkpointing
+#### ✅ Task 5.2: Model Checkpointing
 **Objective:** Implement save/load functionality  
 **Files:** `src/utils/checkpointing.py`  
-**Status:** 🔄 **PENDING**
+**Status:** ✅ **COMPLETED**
 
 **Details:**
 - Save model weights and training state

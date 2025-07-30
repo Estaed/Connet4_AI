@@ -205,18 +205,19 @@ class Connect4Game:
             'game_time': time.time() - self.start_time
         }
         
-    def render(self, mode: str = 'human', show_stats: bool = True) -> Optional[str]:
+    def render(self, mode: str = 'human', show_stats: bool = True, show_column_numbers: bool = True) -> Optional[str]:
         """
         Render the game board and statistics using centralized rendering.
         
         Args:
             mode: Rendering mode ('human' for terminal output)
             show_stats: Whether to show performance statistics
+            show_column_numbers: Whether to show column numbers at top of board
             
         Returns:
             String representation if mode != 'human', None otherwise
         """
-        return render_connect4_game(self, mode, show_stats)
+        return render_connect4_game(self, mode, show_stats, show_column_numbers)
             
     def __str__(self) -> str:
         """String representation of the game board."""

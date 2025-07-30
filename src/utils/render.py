@@ -131,7 +131,7 @@ def format_metric(label: str, value: str, color: str = Colors.INFO) -> str:
     return f"{label:<20} {color}{value}{Colors.RESET}"
 
 
-def render_connect4_game(game_obj, mode: str = "human", show_stats: bool = True):
+def render_connect4_game(game_obj, mode: str = "human", show_stats: bool = True, show_column_numbers: bool = True):
     """
     Render the Connect4 game board and statistics.
 
@@ -156,9 +156,10 @@ def render_connect4_game(game_obj, mode: str = "human", show_stats: bool = True)
     # Build output string
     output_lines = []
 
-    # Column numbers with color (1-7 instead of 0-6)
-    header = " " + "".join(f" {i+1}  " for i in range(game_obj.board_cols))
-    output_lines.append(f"{Colors.HEADER}{header}{Colors.RESET}")
+    # Column numbers with color (1-7 instead of 0-6) - only if requested
+    if show_column_numbers:
+        header = " " + "".join(f" {i+1}  " for i in range(game_obj.board_cols))
+        output_lines.append(f"{Colors.HEADER}{header}{Colors.RESET}")
     output_lines.append(f"{Colors.HEADER}{'='*30}{Colors.RESET}")
 
     # Board display with colors

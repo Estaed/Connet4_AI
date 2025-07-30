@@ -919,8 +919,7 @@ class TrainingInterface:
             )
             
             if choice == '5':
-                print(f"{Colors.INFO}Training Settings - Coming Soon!{Colors.RESET}")
-                input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+                self._show_training_settings()
                 continue
             elif choice == '6':
                 print(f"{Colors.SUCCESS}Returning to main menu. Goodbye!{Colors.RESET}")
@@ -934,6 +933,562 @@ class TrainingInterface:
                     print(f"\n{Colors.INFO}Training session completed.{Colors.RESET}")
                 
                 input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _show_training_settings(self) -> None:
+        """Show training settings menu with model resume functionality."""
+        while True:
+            clear_screen()
+            print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+            print(f"{Colors.BOLD}{Colors.INFO}>>> TRAINING SETTINGS <<<{Colors.RESET}")
+            print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+            
+            print(f"\n{Colors.INFO}Available Options:{Colors.RESET}")
+            print(f"{Colors.SUCCESS}1{Colors.RESET} - Resume Training from Checkpoint")
+            print(f"{Colors.SUCCESS}2{Colors.RESET} - Load Existing Model for Continued Training")
+            print(f"{Colors.SUCCESS}3{Colors.RESET} - View Available Checkpoints")
+            print(f"{Colors.SUCCESS}4{Colors.RESET} - Training Configuration Settings")
+            print(f"{Colors.SUCCESS}5{Colors.RESET} - Clear Training Data")
+            print(f"{Colors.WARNING}6{Colors.RESET} - Back to Training Menu")
+            
+            choice = self.get_user_choice(
+                f"\n{Colors.INFO}Enter your choice (1-6): {Colors.RESET}",
+                ['1', '2', '3', '4', '5', '6']
+            )
+            
+            if choice == '1':
+                self._resume_training_from_checkpoint()
+            elif choice == '2':
+                self._load_model_for_training()
+            elif choice == '3':
+                self._view_available_checkpoints()
+            elif choice == '4':
+                self._show_training_configuration()
+            elif choice == '5':
+                self._clear_training_data()
+            elif choice == '6':
+                break
+    
+    def _resume_training_from_checkpoint(self) -> None:
+        """Resume training from an existing checkpoint."""
+        print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.BOLD}{Colors.INFO}>>> RESUME TRAINING FROM CHECKPOINT <<<{Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        
+        # Search for checkpoints across all training level directories
+        from pathlib import Path
+        import os
+        
+        models_dir = Path("models")
+        all_checkpoints = []
+        training_levels = ['test', 'small', 'medium', 'impossible']
+        
+        # Search each level directory for checkpoints
+        for level in training_levels:
+            level_dir = models_dir / level
+            if level_dir.exists():
+                print(f"{Colors.INFO}Searching {level} directory...{Colors.RESET}")
+                checkpoint_manager = CheckpointManager(checkpoint_dir=level_dir)
+                level_checkpoints = checkpoint_manager.list_checkpoints()
+                
+                # Add training level info to each checkpoint
+                for cp in level_checkpoints:
+                    cp['training_level'] = level.title()
+                all_checkpoints.extend(level_checkpoints)
+        
+        # Also check main models directory
+        if models_dir.exists():
+            print(f"{Colors.INFO}Searching main models directory...{Colors.RESET}")
+            main_checkpoint_manager = CheckpointManager(checkpoint_dir=models_dir)
+            main_checkpoints = main_checkpoint_manager.list_checkpoints()
+            for cp in main_checkpoints:
+                cp['training_level'] = 'General'
+            all_checkpoints.extend(main_checkpoints)
+        
+        # Sort by episode (newest first)
+        checkpoints = sorted(all_checkpoints, key=lambda x: x.get('episode', 0), reverse=True)
+        
+        if not checkpoints:
+            print(f"\n{Colors.ERROR}No checkpoints found in models/ directory.{Colors.RESET}")
+            print(f"{Colors.INFO}Train a model first to create checkpoints.{Colors.RESET}")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        print(f"\n{Colors.INFO}Found {len(checkpoints)} checkpoint(s):{Colors.RESET}")
+        print()
+        
+        # Display checkpoints
+        for i, checkpoint in enumerate(checkpoints, 1):
+            episode = checkpoint.get('episode', 0)
+            file_size = checkpoint.get('file_size_mb', 0)
+            timestamp = checkpoint.get('timestamp', 0)
+            is_best = checkpoint.get('is_best', False)
+            training_level = checkpoint.get('training_level', 'Unknown')
+            
+            # Format timestamp
+            import time
+            time_str = time.strftime('%Y-%m-%d %H:%M', time.localtime(timestamp)) if timestamp else 'Unknown'
+            
+            # Status indicators
+            best_indicator = f"{Colors.SUCCESS}⭐ BEST{Colors.RESET}" if is_best else ""
+            
+            print(f"{Colors.SUCCESS}{i:2}{Colors.RESET} - {Colors.INFO}{checkpoint['name']}{Colors.RESET}")
+            print(f"      Level: {Colors.WARNING}{training_level}{Colors.RESET} | "
+                  f"Episode: {Colors.WARNING}{episode:,}{Colors.RESET} | "
+                  f"Size: {Colors.INFO}{file_size:.1f}MB{Colors.RESET}")
+            print(f"      Date: {Colors.INFO}{time_str}{Colors.RESET} {best_indicator}")
+            print()
+        
+        # Get user selection
+        valid_choices = [str(i) for i in range(1, len(checkpoints) + 1)] + ['b', 'back']
+        choice = self.get_user_choice(
+            f"{Colors.INFO}Select checkpoint (1-{len(checkpoints)}) or 'b' for back: {Colors.RESET}",
+            valid_choices
+        )
+        
+        if choice.lower() in ['b', 'back']:
+            return
+        
+        # Get selected checkpoint
+        checkpoint_index = int(choice) - 1
+        selected_checkpoint = checkpoints[checkpoint_index]
+        
+        print(f"\n{Colors.INFO}Selected: {Colors.SUCCESS}{selected_checkpoint['name']}{Colors.RESET}")
+        
+        # Show training level options for resumption
+        print(f"\n{Colors.INFO}Select training level to continue with:{Colors.RESET}")
+        print(f"{Colors.SUCCESS}1{Colors.RESET} - Test Training (1,000 episodes)")
+        print(f"{Colors.SUCCESS}2{Colors.RESET} - Small Training (10,000 episodes)")
+        print(f"{Colors.SUCCESS}3{Colors.RESET} - Medium Training (100,000 episodes)")
+        print(f"{Colors.SUCCESS}4{Colors.RESET} - Impossible Training (1,000,000 episodes)")
+        
+        level_choice = self.get_user_choice(
+            f"\n{Colors.INFO}Select training level (1-4): {Colors.RESET}",
+            ['1', '2', '3', '4']
+        )
+        
+        level_configs = {
+            '1': {'name': 'Test', 'episodes': 1000},
+            '2': {'name': 'Small', 'episodes': 10000},
+            '3': {'name': 'Medium', 'episodes': 100000},
+            '4': {'name': 'Impossible', 'episodes': 1000000}
+        }
+        
+        level_config = level_configs[level_choice]
+        starting_episode = selected_checkpoint.get('episode', 0)
+        remaining_episodes = max(0, level_config['episodes'] - starting_episode)
+        
+        print(f"\n{Colors.INFO}Training Configuration:{Colors.RESET}")
+        print(f"Level: {Colors.SUCCESS}{level_config['name']}{Colors.RESET}")
+        print(f"Starting Episode: {Colors.WARNING}{starting_episode:,}{Colors.RESET}")
+        print(f"Target Episodes: {Colors.WARNING}{level_config['episodes']:,}{Colors.RESET}")
+        print(f"Remaining Episodes: {Colors.WARNING}{remaining_episodes:,}{Colors.RESET}")
+        
+        if remaining_episodes <= 0:
+            print(f"\n{Colors.WARNING}This checkpoint has already completed the selected training level!{Colors.RESET}")
+            print(f"{Colors.INFO}You can still continue training beyond the target episodes.{Colors.RESET}")
+            remaining_episodes = 1000  # Default additional training
+        
+        confirm = self.get_user_choice(
+            f"\n{Colors.WARNING}Start resume training? (y/n): {Colors.RESET}",
+            ['y', 'n', 'yes', 'no']
+        ).lower()
+        
+        if confirm in ['n', 'no']:
+            print(f"{Colors.INFO}Resume training cancelled.{Colors.RESET}")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        # Initialize trainer with checkpoint loading
+        try:
+            print(f"\n{Colors.INFO}Initializing trainer with checkpoint...{Colors.RESET}")
+            
+            # Create trainer
+            trainer = SingleEnvTrainer(self.config)
+            
+            # Load checkpoint using the correct checkpoint manager
+            checkpoint_path = selected_checkpoint['path']
+            checkpoint_dir = Path(checkpoint_path).parent
+            
+            print(f"{Colors.INFO}Loading checkpoint: {selected_checkpoint['name']}{Colors.RESET}")
+            print(f"{Colors.INFO}From directory: {checkpoint_dir}{Colors.RESET}")
+            
+            # Create checkpoint manager for the specific directory
+            specific_checkpoint_manager = CheckpointManager(checkpoint_dir=checkpoint_dir)
+            
+            checkpoint_data = specific_checkpoint_manager.load_checkpoint(
+                checkpoint_path=checkpoint_path,
+                agent=trainer.agent,
+                optimizer=getattr(trainer.agent, 'optimizer', None),
+                strict_loading=False
+            )
+            
+            print(f"{Colors.SUCCESS}Checkpoint loaded successfully!{Colors.RESET}")
+            print(f"{Colors.INFO}Loaded episode: {checkpoint_data.get('episode', 0):,}{Colors.RESET}")
+            
+            # Update trainer state
+            trainer.stats.win_stats.update(checkpoint_data.get('training_stats', {}))
+            trainer.stats.ppo_metrics.update(checkpoint_data.get('training_metrics', {}))
+            
+            # Resume training
+            print(f"\n{Colors.SUCCESS}Starting resume training...{Colors.RESET}")
+            input(f"{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            
+            # Run training starting from checkpoint episode
+            results = trainer.train(
+                level_name=f"{level_config['name']}_Resumed",
+                total_episodes=level_config['episodes'],
+                show_game_render=(level_choice == '1'),
+                render_interval=max(1, remaining_episodes // 10) if level_choice == '1' else remaining_episodes + 1
+            )
+            
+            print(f"\n{Colors.SUCCESS}Resume training completed successfully!{Colors.RESET}")
+            
+        except Exception as e:
+            print(f"\n{Colors.ERROR}Failed to resume training: {e}{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _load_model_for_training(self) -> None:
+        """Load an existing model for continued training."""
+        print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.BOLD}{Colors.INFO}>>> LOAD EXISTING MODEL FOR CONTINUED TRAINING <<<{Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        
+        print(f"\n{Colors.INFO}This feature loads any .pt model file and continues training from there.{Colors.RESET}")
+        print(f"{Colors.INFO}Unlike checkpoint resumption, this works with any compatible model file.{Colors.RESET}")
+        
+        # Search for all .pt files in models directory and subdirectories
+        from pathlib import Path
+        import os
+        
+        models_dir = Path("models")
+        if not models_dir.exists():
+            print(f"\n{Colors.ERROR}Models directory not found: {models_dir}{Colors.RESET}")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        # Find all .pt files
+        model_files = []
+        for pt_file in models_dir.rglob("*.pt"):
+            if pt_file.is_file():
+                file_size_mb = pt_file.stat().st_size / (1024 * 1024)
+                rel_path = pt_file.relative_to(models_dir)
+                model_files.append({
+                    'name': pt_file.name,
+                    'path': str(pt_file),
+                    'relative_path': str(rel_path),
+                    'file_size_mb': file_size_mb,
+                    'directory': pt_file.parent.name if pt_file.parent != models_dir else 'models'
+                })
+        
+        if not model_files:
+            print(f"\n{Colors.ERROR}No .pt model files found in models/ directory.{Colors.RESET}")
+            print(f"{Colors.INFO}Train a model first to create model files.{Colors.RESET}")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        # Sort by name
+        model_files.sort(key=lambda x: x['name'])
+        
+        print(f"\n{Colors.INFO}Found {len(model_files)} model file(s):{Colors.RESET}")
+        print()
+        
+        # Display model files
+        for i, model_file in enumerate(model_files, 1):
+            print(f"{Colors.SUCCESS}{i:2}{Colors.RESET} - {Colors.INFO}{model_file['name']}{Colors.RESET}")
+            print(f"      Directory: {Colors.WARNING}{model_file['directory']}{Colors.RESET} | "
+                  f"Size: {Colors.INFO}{model_file['file_size_mb']:.1f}MB{Colors.RESET}")
+            print(f"      Path: {Colors.INFO}{model_file['relative_path']}{Colors.RESET}")
+            print()
+        
+        # Get user selection
+        valid_choices = [str(i) for i in range(1, len(model_files) + 1)] + ['b', 'back']
+        choice = self.get_user_choice(
+            f"{Colors.INFO}Select model (1-{len(model_files)}) or 'b' for back: {Colors.RESET}",
+            valid_choices
+        )
+        
+        if choice.lower() in ['b', 'back']:
+            return
+        
+        # Get selected model
+        model_index = int(choice) - 1
+        selected_model = model_files[model_index]
+        
+        print(f"\n{Colors.INFO}Selected: {Colors.SUCCESS}{selected_model['name']}{Colors.RESET}")
+        
+        # Try to load model and extract information
+        try:
+            import torch
+            print(f"{Colors.INFO}Analyzing model file...{Colors.RESET}")
+            
+            model_data = torch.load(selected_model['path'], map_location='cpu', weights_only=False)
+            
+            # Extract episode information if available
+            starting_episode = model_data.get('episode', 0)
+            has_optimizer = 'optimizer_state_dict' in model_data
+            has_metrics = 'training_metrics' in model_data or 'performance_summary' in model_data
+            
+            print(f"\n{Colors.INFO}Model Analysis:{Colors.RESET}")
+            print(f"Starting Episode: {Colors.WARNING}{starting_episode:,}{Colors.RESET}")
+            print(f"Has Optimizer State: {Colors.SUCCESS if has_optimizer else Colors.ERROR}{'Yes' if has_optimizer else 'No'}{Colors.RESET}")
+            print(f"Has Training Metrics: {Colors.SUCCESS if has_metrics else Colors.ERROR}{'Yes' if has_metrics else 'No'}{Colors.RESET}")
+            
+            if not has_optimizer:
+                print(f"{Colors.WARNING}Note: No optimizer state found. Training will start with fresh optimizer.{Colors.RESET}")
+            if not has_metrics:
+                print(f"{Colors.WARNING}Note: No training metrics found. Statistics will start from zero.{Colors.RESET}")
+            
+        except Exception as e:
+            print(f"\n{Colors.ERROR}Failed to analyze model: {e}{Colors.RESET}")
+            print(f"{Colors.WARNING}Proceeding with basic loading...{Colors.RESET}")
+            starting_episode = 0
+            has_optimizer = False
+            has_metrics = False
+        
+        # Show training level options
+        print(f"\n{Colors.INFO}Select training level to continue with:{Colors.RESET}")
+        print(f"{Colors.SUCCESS}1{Colors.RESET} - Test Training (1,000 episodes)")
+        print(f"{Colors.SUCCESS}2{Colors.RESET} - Small Training (10,000 episodes)")
+        print(f"{Colors.SUCCESS}3{Colors.RESET} - Medium Training (100,000 episodes)")
+        print(f"{Colors.SUCCESS}4{Colors.RESET} - Impossible Training (1,000,000 episodes)")
+        
+        level_choice = self.get_user_choice(
+            f"\n{Colors.INFO}Select training level (1-4): {Colors.RESET}",
+            ['1', '2', '3', '4']
+        )
+        
+        level_configs = {
+            '1': {'name': 'Test', 'episodes': 1000},
+            '2': {'name': 'Small', 'episodes': 10000},
+            '3': {'name': 'Medium', 'episodes': 100000},
+            '4': {'name': 'Impossible', 'episodes': 1000000}
+        }
+        
+        level_config = level_configs[level_choice]
+        remaining_episodes = max(1000, level_config['episodes'] - starting_episode)
+        
+        print(f"\n{Colors.INFO}Training Configuration:{Colors.RESET}")
+        print(f"Level: {Colors.SUCCESS}{level_config['name']}_FromModel{Colors.RESET}")
+        print(f"Starting Episode: {Colors.WARNING}{starting_episode:,}{Colors.RESET}")
+        print(f"Target Episodes: {Colors.WARNING}{level_config['episodes']:,}{Colors.RESET}")
+        print(f"Additional Episodes: {Colors.WARNING}{remaining_episodes:,}{Colors.RESET}")
+        
+        confirm = self.get_user_choice(
+            f"\n{Colors.WARNING}Start training from this model? (y/n): {Colors.RESET}",
+            ['y', 'n', 'yes', 'no']
+        ).lower()
+        
+        if confirm in ['n', 'no']:
+            print(f"{Colors.INFO}Model loading cancelled.{Colors.RESET}")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        # Initialize trainer and load model
+        try:
+            print(f"\n{Colors.INFO}Initializing trainer with model...{Colors.RESET}")
+            
+            # Create trainer
+            trainer = SingleEnvTrainer(self.config)
+            
+            # Load model
+            print(f"{Colors.INFO}Loading model: {selected_model['name']}{Colors.RESET}")
+            
+            # Use CheckpointManager's load_checkpoint method for consistency
+            model_dir = Path(selected_model['path']).parent
+            model_checkpoint_manager = CheckpointManager(checkpoint_dir=model_dir)
+            
+            model_data = model_checkpoint_manager.load_checkpoint(
+                checkpoint_path=selected_model['path'],
+                agent=trainer.agent,
+                optimizer=getattr(trainer.agent, 'optimizer', None) if has_optimizer else None,
+                strict_loading=False,
+                load_optimizer=has_optimizer
+            )
+            
+            print(f"{Colors.SUCCESS}Model loaded successfully!{Colors.RESET}")
+            print(f"{Colors.INFO}Loaded episode: {model_data.get('episode', 0):,}{Colors.RESET}")
+            
+            # Update trainer state if metrics are available
+            if has_metrics:
+                trainer.stats.win_stats.update(model_data.get('training_stats', {}))
+                trainer.stats.ppo_metrics.update(model_data.get('training_metrics', {}))
+                print(f"{Colors.SUCCESS}Training metrics restored.{Colors.RESET}")
+            else:
+                print(f"{Colors.WARNING}Starting with fresh training metrics.{Colors.RESET}")
+            
+            # Start training
+            print(f"\n{Colors.SUCCESS}Starting continued training...{Colors.RESET}")
+            input(f"{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            
+            # Run training
+            results = trainer.train(
+                level_name=f"{level_config['name']}_FromModel",
+                total_episodes=max(level_config['episodes'], starting_episode + remaining_episodes),
+                show_game_render=(level_choice == '1'),
+                render_interval=max(1, remaining_episodes // 10) if level_choice == '1' else remaining_episodes + 1
+            )
+            
+            print(f"\n{Colors.SUCCESS}Continued training completed successfully!{Colors.RESET}")
+            
+        except Exception as e:
+            print(f"\n{Colors.ERROR}Failed to load model for training: {e}{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _view_available_checkpoints(self) -> None:
+        """View detailed information about available checkpoints."""
+        print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.BOLD}{Colors.INFO}>>> AVAILABLE CHECKPOINTS <<<{Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        
+        # Search all training level directories
+        from pathlib import Path
+        import os
+        
+        models_dir = Path("models")
+        if not models_dir.exists():
+            print(f"\n{Colors.ERROR}Models directory not found: {models_dir}{Colors.RESET}")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        all_checkpoints = []
+        training_levels = ['test', 'small', 'medium', 'impossible']
+        
+        for level in training_levels:
+            level_dir = models_dir / level
+            if level_dir.exists():
+                checkpoint_manager = CheckpointManager(checkpoint_dir=level_dir)
+                checkpoints = checkpoint_manager.list_checkpoints()
+                for cp in checkpoints:
+                    cp['training_level'] = level.title()
+                all_checkpoints.extend(checkpoints)
+        
+        # Also check main models directory
+        main_checkpoint_manager = CheckpointManager(checkpoint_dir=models_dir)
+        main_checkpoints = main_checkpoint_manager.list_checkpoints()
+        for cp in main_checkpoints:
+            cp['training_level'] = 'General'
+        all_checkpoints.extend(main_checkpoints)
+        
+        if not all_checkpoints:
+            print(f"\n{Colors.ERROR}No checkpoints found in any training directories.{Colors.RESET}")
+            print(f"{Colors.INFO}Available directories checked:{Colors.RESET}")
+            for level in training_levels:
+                level_dir = models_dir / level
+                status = "✓" if level_dir.exists() else "✗"
+                print(f"  {status} models/{level}/")
+            print(f"  ✓ models/")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        # Sort by episode (newest first)
+        all_checkpoints.sort(key=lambda x: x.get('episode', 0), reverse=True)
+        
+        print(f"\n{Colors.INFO}Found {len(all_checkpoints)} checkpoint(s) across all training levels:{Colors.RESET}")
+        print()
+        
+        # Display checkpoints with detailed info
+        for i, checkpoint in enumerate(all_checkpoints, 1):
+            episode = checkpoint.get('episode', 0)
+            file_size = checkpoint.get('file_size_mb', 0)
+            timestamp = checkpoint.get('timestamp', 0)
+            is_best = checkpoint.get('is_best', False)
+            training_level = checkpoint.get('training_level', 'Unknown')
+            
+            # Format timestamp
+            import time
+            time_str = time.strftime('%Y-%m-%d %H:%M', time.localtime(timestamp)) if timestamp else 'Unknown'
+            
+            # Status indicators
+            best_indicator = f"{Colors.SUCCESS}⭐{Colors.RESET}" if is_best else "  "
+            
+            print(f"{best_indicator} {Colors.SUCCESS}{i:2}{Colors.RESET} - {Colors.INFO}{checkpoint['name']}{Colors.RESET}")
+            print(f"      Level: {Colors.WARNING}{training_level}{Colors.RESET} | "
+                  f"Episode: {Colors.WARNING}{episode:,}{Colors.RESET} | "
+                  f"Size: {Colors.INFO}{file_size:.1f}MB{Colors.RESET}")
+            print(f"      Date: {Colors.INFO}{time_str}{Colors.RESET} | "
+                  f"Path: {Colors.INFO}{os.path.dirname(checkpoint['path'])}{Colors.RESET}")
+            
+            # Show performance summary if available
+            perf_summary = checkpoint.get('performance_summary', {})
+            if perf_summary:
+                win_rate = perf_summary.get('win_rate', 0)
+                total_games = perf_summary.get('total_games', 0)
+                avg_reward = perf_summary.get('avg_reward', 0)
+                
+                if total_games > 0:
+                    print(f"      Performance: Win Rate {Colors.SUCCESS}{win_rate:.1f}%{Colors.RESET} | "
+                          f"Games: {Colors.INFO}{total_games:,}{Colors.RESET} | "
+                          f"Avg Reward: {Colors.INFO}{avg_reward:.3f}{Colors.RESET}")
+            
+            print()
+        
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _show_training_configuration(self) -> None:
+        """Show and modify training configuration settings."""
+        print(f"\n{Colors.INFO}Training Configuration - Coming Soon!{Colors.RESET}")
+        print(f"{Colors.INFO}This feature will allow modifying training hyperparameters.{Colors.RESET}")
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+    
+    def _clear_training_data(self) -> None:
+        """Clear training data with confirmation."""
+        print(f"\n{Colors.ERROR}{Colors.BOLD}⚠️  CLEAR TRAINING DATA ⚠️{Colors.RESET}")
+        print(f"{Colors.WARNING}This will permanently delete all training checkpoints and models.{Colors.RESET}")
+        print(f"{Colors.ERROR}This action cannot be undone!{Colors.RESET}")
+        
+        confirm1 = self.get_user_choice(
+            f"\n{Colors.ERROR}Are you sure you want to clear all training data? (yes/no): {Colors.RESET}",
+            ['yes', 'no']
+        ).lower()
+        
+        if confirm1 != 'yes':
+            print(f"{Colors.INFO}Clear operation cancelled.{Colors.RESET}")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        confirm2 = self.get_user_choice(
+            f"{Colors.ERROR}Final confirmation - Type 'DELETE ALL' to proceed: {Colors.RESET}",
+            ['DELETE ALL', 'cancel']
+        )
+        
+        if confirm2 != 'DELETE ALL':
+            print(f"{Colors.INFO}Clear operation cancelled.{Colors.RESET}")
+            input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
+            return
+        
+        # Clear training data
+        try:
+            from pathlib import Path
+            import shutil
+            
+            models_dir = Path("models")
+            logs_dir = Path("logs")
+            
+            deleted_items = []
+            
+            # Remove models directory
+            if models_dir.exists():
+                shutil.rmtree(models_dir)
+                deleted_items.append("models/")
+            
+            # Remove logs directory
+            if logs_dir.exists():
+                shutil.rmtree(logs_dir)
+                deleted_items.append("logs/")
+            
+            if deleted_items:
+                print(f"\n{Colors.SUCCESS}Successfully deleted:{Colors.RESET}")
+                for item in deleted_items:
+                    print(f"  ✓ {item}")
+            else:
+                print(f"\n{Colors.INFO}No training data found to delete.{Colors.RESET}")
+                
+        except Exception as e:
+            print(f"\n{Colors.ERROR}Failed to clear training data: {e}{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to continue...{Colors.RESET}")
 
 
 def main():

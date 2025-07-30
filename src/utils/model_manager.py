@@ -415,8 +415,8 @@ class ModelManager:
             return result
         
         try:
-            # Try to load the model
-            checkpoint_data = torch.load(model_path, map_location='cpu')
+            # Try to load the model with weights_only=False for compatibility
+            checkpoint_data = torch.load(model_path, map_location='cpu', weights_only=False)
             
             # Check required fields
             required_fields = ['model_state_dict', 'episode', 'timestamp']
