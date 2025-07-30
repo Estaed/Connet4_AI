@@ -363,7 +363,7 @@ class ModelManager:
                 if hasattr(agent, 'network') and 'model_state_dict' in checkpoint_data:
                     agent.network.load_state_dict(checkpoint_data['model_state_dict'])
             
-            print(f"[ModelManager] ✅ Model loaded successfully")
+            print(f"[ModelManager] Model loaded successfully")
             print(f"  Episode: {model_metadata.episode:,}")
             print(f"  Win Rate: {model_metadata.win_rate:.1f}%")
             print(f"  Skill Level: {model_metadata.get_skill_level()}")
@@ -371,7 +371,7 @@ class ModelManager:
             return agent
             
         except Exception as e:
-            print(f"[ModelManager] ❌ Failed to load model: {e}")
+            print(f"[ModelManager] Failed to load model: {e}")
             return None
     
     def validate_model(self, model_name: str) -> Dict[str, Any]:
@@ -605,4 +605,4 @@ if __name__ == "__main__":
     stats = manager.get_statistics()
     print(f"Statistics: {stats}")
     
-    print("✅ ModelManager test completed!")
+    print("ModelManager test completed!")

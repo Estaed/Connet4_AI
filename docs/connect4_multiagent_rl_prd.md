@@ -440,61 +440,60 @@ class CheckpointManager:
 
 **Verification:** Can save and resume training from checkpoints
 
-#### ✅ Task 5.3: Multi-Environment Training Optimization
-**Objective:** Scale training with multiple parallel environments for faster data collection  
-**Files:** Update `scripts/train.py`, create `src/training/multi_env_trainer.py`  
+#### ✅ Task 5.3: Hybrid Vectorized Multi-Environment Training
+**Objective:** Implement high-performance hybrid vectorized training system  
+**Files:** `src/training/hybrid_trainer.py`, `src/environments/hybrid_vectorized_connect4.py`, `src/training/training_interface.py`, `src/training/training_statistics.py`  
 **Status:** ✅ **COMPLETED**
 
 **Details:**
-- Parallel environment instances for accelerated experience collection
-- Vectorized experience gathering from multiple simultaneous games
-- Batch processing for multiple Connect4 games running concurrently
-- Maintains single PPO agent while scaling data collection
-- Significant training speedup through parallelization
+- **Hybrid Architecture**: CPU game logic with GPU neural network acceleration
+- **Vectorized Environments**: Up to 10,000 parallel Connect4 environments
+- **Three Difficulty Levels**: Small (100), Medium (1000), Impossible (10000) environments
+- **Batched Operations**: Efficient GPU tensor operations for neural networks
+- **Advanced Statistics**: Comprehensive training metrics and performance tracking
+- **Checkpoint Management**: Automatic model saving with compression
 
-**Implementation Structure:**
+**Key Implementation:**
 ```python
-class MultiEnvTrainer:
-    def __init__(self, num_envs=8):
-        self.num_envs = num_envs
-        self.envs = [Connect4Env() for _ in range(num_envs)]
-        self.agent = PPOAgent(device='cuda' if torch.cuda.is_available() else 'cpu')
-        
-    def collect_experiences_parallel(self):
-        # Collect experiences from multiple environments simultaneously
-        for env_idx in range(self.num_envs):
-            # Run game in parallel, collect experiences
-            pass
-            
-    def train_step(self):
-        # Collect experiences from all environments
-        # Update agent with batched experiences
-        pass
+class HybridTrainer:
+    DIFFICULTY_CONFIGS = {
+        'small': {'num_envs': 100, 'batch_size': 64, 'update_frequency': 20},
+        'medium': {'num_envs': 1000, 'batch_size': 256, 'update_frequency': 50}, 
+        'impossible': {'num_envs': 10000, 'batch_size': 512, 'update_frequency': 100}
+    }
+    
+    def collect_experiences(self, num_steps):
+        # Vectorized experience collection from all environments
+        observations = self.vec_env.get_observations_gpu()
+        actions, log_probs, values = self.agent.get_actions_batch(observations)
+        rewards, dones, info = self.vec_env.step_batch(actions)
 ```
 
 **Benefits:**
-- **Training Speed**: 4-8x faster experience collection with parallel environments
-- **Data Diversity**: More diverse training experiences from simultaneous games
-- **Sample Efficiency**: Better sample utilization through batch processing
-- **Scalability**: Easy to scale from 1 to N environments based on hardware
+- **Massive Scalability**: Support for 100-10,000 parallel environments
+- **GPU Optimization**: Neural networks run on GPU while game logic stays on CPU
+- **Performance**: 10-100x faster training than sequential approaches
+- **Memory Efficient**: Optimized memory usage with minimal CPU-GPU transfers
+- **Robust Statistics**: Detailed training metrics and progress tracking
 
-**Verification:** Training runs significantly faster with multiple environments, maintains learning quality
+**Verification:** Successfully trains with 1,000+ environments, maintains learning quality, fixes all attribute errors
 
 ---
 
-### 🔄 Phase 6: Game Interface
+### ✅ Phase 6: Game Interface
 
-#### Task 6.1: Interactive Game Script
+#### ✅ Task 6.1: Interactive Game Script
 **Objective:** Create playable interface for testing agents  
 **Files:** `scripts/play.py`  
-**Status:** 🔄 **PENDING**
+**Status:** ✅ **COMPLETED**
 
 **Details:**
 - Terminal-based game interface
-- Three game modes:
+- Four game modes:
   1. Random vs Random (for testing)
   2. Human vs Human (for fun)
   3. Human vs AI (main feature)
+  4. AI vs AI (model comparison and evaluation)
 - Clear board visualization
 - Input validation and error handling
 
@@ -502,20 +501,68 @@ class MultiEnvTrainer:
 ```python
 def main_menu():
     print("Connect4 Game")
-    print("1. Random vs Random")
-    print("2. Human vs Human")
+    print("1. Human vs Human")
+    print("2. Random vs Random")
     print("3. Human vs AI")
-    choice = input("Select mode (1-3): ")
+    print("4. AI vs AI")
+    print("5. Start Training")
+    print("6. Model Management")
+    print("7. View Statistics")
+    print("8. Exit")
+    choice = input("Select mode (1-8): ")
     
     if choice == '1':
-        play_random_vs_random()
-    elif choice == '2':
         play_human_vs_human()
+    elif choice == '2':
+        play_random_vs_random()
     elif choice == '3':
         play_human_vs_ai()
+    elif choice == '4':
+        play_ai_vs_ai()
+    # ... additional options
 ```
 
 **Verification:** All game modes work correctly with good user experience
+
+#### ✅ Task 6.2: AI vs AI Mode Implementation
+**Objective:** Allow two AI models to compete against each other for training evaluation  
+**Files:** `scripts/play.py`, `src/utils/render.py`  
+**Status:** ✅ **COMPLETED**
+
+**Details:**
+- Model selection interface for choosing two different AI agents
+- Support for comparing models with different training episodes and skill levels
+- Real-time game display showing AI decision-making process
+- Comprehensive match statistics and session summaries
+- Win rate analysis and performance comparison between models
+- Automatic handling of model loading and error fallbacks
+
+**Key Features:**
+```python
+def play_ai_vs_ai():
+    # Two-step model selection process
+    # 1. Select first AI model (Player X)
+    # 2. Select second AI model (Player O) from remaining models
+    
+    # Configurable game settings
+    # - Number of games (1-10)
+    # - Auto-advance vs manual progression
+    # - Real-time move display with AI "thinking" indicators
+    
+    # Comprehensive results analysis
+    # - Individual game results
+    # - Overall win rates and statistics
+    # - Average game duration and move counts
+    # - Series winner determination
+```
+
+**Benefits:**
+- **Training Evaluation**: Direct comparison of different training checkpoints
+- **Strategy Analysis**: Observe how different models approach the game
+- **Progress Validation**: Verify that newer models outperform older ones
+- **Performance Benchmarking**: Quantitative comparison of AI capabilities
+
+**Verification:** Successfully enables AI model comparison with detailed statistics and user-friendly interface
 
 ---
 

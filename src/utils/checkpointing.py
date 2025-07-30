@@ -67,7 +67,8 @@ class CheckpointManager:
         max_checkpoints: int = 5,
         auto_save_frequency: int = 1000,  # Every 1000 episodes
         enable_compression: bool = True,
-        model_name_prefix: str = "connect4_ppo"
+        model_name_prefix: str = "connect4_ppo",
+        difficulty_level: Optional[str] = None
     ):
         """
         Initialize checkpoint manager.
@@ -78,8 +79,17 @@ class CheckpointManager:
             auto_save_frequency: Episodes between automatic saves
             enable_compression: Whether to compress checkpoint files
             model_name_prefix: Prefix for model filenames
+            difficulty_level: Training difficulty level (small, medium, impossible, custom)
         """
-        self.checkpoint_dir = Path(checkpoint_dir)
+        self.base_checkpoint_dir = Path(checkpoint_dir)
+        self.difficulty_level = difficulty_level
+        
+        # Create difficulty-specific subdirectory if specified
+        if difficulty_level:
+            self.checkpoint_dir = self.base_checkpoint_dir / difficulty_level
+        else:
+            self.checkpoint_dir = self.base_checkpoint_dir
+        
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
         self.max_checkpoints = max_checkpoints
@@ -99,7 +109,10 @@ class CheckpointManager:
         self._discover_existing_checkpoints()
         
         print(f"[CheckpointManager] Initialized")
-        print(f"  Directory: {self.checkpoint_dir}")
+        print(f"  Base directory: {self.base_checkpoint_dir}")
+        if self.difficulty_level:
+            print(f"  Difficulty folder: {self.difficulty_level}")
+        print(f"  Full path: {self.checkpoint_dir}")
         print(f"  Auto-save frequency: {self.auto_save_frequency:,} episodes")
         print(f"  Max checkpoints: {self.max_checkpoints}")
         print(f"  Compression: {self.enable_compression}")
@@ -211,7 +224,7 @@ class CheckpointManager:
             file_size_mb = checkpoint_path.stat().st_size / (1024 * 1024)
             save_time = time.time() - save_start_time
             
-            print(f"[CheckpointManager] ✅ Checkpoint saved successfully")
+            print(f"[CheckpointManager] Checkpoint saved successfully")
             print(f"  File: {checkpoint_name}")
             print(f"  Size: {file_size_mb:.1f} MB")
             print(f"  Save time: {save_time:.2f}s")
@@ -237,7 +250,7 @@ class CheckpointManager:
             return str(checkpoint_path)
             
         except Exception as e:
-            print(f"[CheckpointManager] ❌ Failed to save checkpoint: {e}")
+            print(f"[CheckpointManager] Failed to save checkpoint: {e}")
             # Clean up partial file if it exists
             if checkpoint_path.exists():
                 try:
@@ -296,7 +309,7 @@ class CheckpointManager:
                             checkpoint_data['model_state_dict'], 
                             strict=strict_loading
                         )
-                        print(f"[CheckpointManager] ✅ Model state loaded")
+                        print(f"[CheckpointManager] Model state loaded")
                     else:
                         print(f"[CheckpointManager] ⚠️  Agent has no 'network' attribute")
                 except Exception as e:
@@ -311,7 +324,7 @@ class CheckpointManager:
                 checkpoint_data['optimizer_state_dict']):
                 try:
                     optimizer.load_state_dict(checkpoint_data['optimizer_state_dict'])
-                    print(f"[CheckpointManager] ✅ Optimizer state loaded")
+                    print(f"[CheckpointManager] Optimizer state loaded")
                 except Exception as e:
                     if strict_loading:
                         raise
@@ -346,14 +359,14 @@ class CheckpointManager:
             load_time = time.time() - load_start_time
             self.load_times.append(load_time)
             
-            print(f"[CheckpointManager] ✅ Checkpoint loaded successfully")
+            print(f"[CheckpointManager] Checkpoint loaded successfully")
             print(f"  Episode: {checkpoint_data.get('episode', 'unknown'):,}")
             print(f"  Load time: {load_time:.2f}s")
             
             return checkpoint_data
             
         except Exception as e:
-            print(f"[CheckpointManager] ❌ Failed to load checkpoint: {e}")
+            print(f"[CheckpointManager] Failed to load checkpoint: {e}")
             raise
     
     def should_auto_save(self, episode: int) -> bool:
@@ -543,7 +556,8 @@ def create_checkpoint_manager(
     checkpoint_dir: str = "models",
     max_checkpoints: int = 5,
     auto_save_frequency: int = 1000,
-    model_name_prefix: str = "connect4_ppo"
+    model_name_prefix: str = "connect4_ppo",
+    difficulty_level: Optional[str] = None
 ) -> CheckpointManager:
     """
     Factory function to create checkpoint manager.
@@ -553,6 +567,7 @@ def create_checkpoint_manager(
         max_checkpoints: Maximum checkpoints to keep
         auto_save_frequency: Episodes between auto-saves
         model_name_prefix: Prefix for model filenames
+        difficulty_level: Training difficulty level for folder organization
     
     Returns:
         Configured CheckpointManager
@@ -561,7 +576,8 @@ def create_checkpoint_manager(
         checkpoint_dir=checkpoint_dir,
         max_checkpoints=max_checkpoints,
         auto_save_frequency=auto_save_frequency,
-        model_name_prefix=model_name_prefix
+        model_name_prefix=model_name_prefix,
+        difficulty_level=difficulty_level
     )
 
 
@@ -658,4 +674,4 @@ if __name__ == "__main__":
     if test_dir.exists():
         shutil.rmtree(test_dir)
     
-    print("✅ CheckpointManager test completed!")
+    print("CheckpointManager test completed!")

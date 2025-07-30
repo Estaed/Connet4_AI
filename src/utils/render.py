@@ -334,10 +334,13 @@ def render_main_menu() -> None:
     print(
         f"{Colors.INFO}3. Human vs AI{Colors.RESET} (Select trained model - Available!)"
     )
-    print(f"{Colors.HEADER}{Colors.BOLD}4. Start Training{Colors.RESET} (PPO Agent Training - Available!)")
-    print(f"{Colors.INFO}5. Model Management{Colors.RESET} (Browse, validate, manage models)")
-    print(f"{Colors.HEADER}6. View Statistics{Colors.RESET}")
-    print(f"{Colors.ERROR}7. Exit{Colors.RESET}")
+    print(
+        f"{Colors.PLAYER2}4. AI vs AI{Colors.RESET} (Select two models to compete - Available!)"
+    )
+    print(f"{Colors.HEADER}{Colors.BOLD}5. Start Training{Colors.RESET} (PPO Agent Training - Available!)")
+    print(f"{Colors.INFO}6. Model Management{Colors.RESET} (Browse, validate, manage models)")
+    print(f"{Colors.HEADER}7. View Statistics{Colors.RESET}")
+    print(f"{Colors.ERROR}8. Exit{Colors.RESET}")
     print(f"\n{Colors.HEADER}{'-' * 50}{Colors.RESET}")
 
 

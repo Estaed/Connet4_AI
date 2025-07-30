@@ -127,7 +127,8 @@ class Connect4Network(nn.Module):
         Returns:
             Validated device string
         """
-        if device == 'cuda' or device.startswith('cuda:'):
+        device_str = str(device)
+        if device_str == 'cuda' or device_str.startswith('cuda:'):
             if not torch.cuda.is_available():
                 logging.warning("CUDA requested but not available, falling back to CPU")
                 return 'cpu'
@@ -138,16 +139,16 @@ class Connect4Network(nn.Module):
                 logging.info(f"CUDA version: {cuda_version}")
                 
             # Use specified GPU or default to cuda:0
-            if device == 'cuda':
-                device = 'cuda:0'
+            if device_str == 'cuda':
+                device_str = 'cuda:0'
             
             # Validate GPU index
-            gpu_index = int(device.split(':')[1]) if ':' in device else 0
+            gpu_index = int(device_str.split(':')[1]) if ':' in device_str else 0
             if gpu_index >= torch.cuda.device_count():
                 logging.warning(f"GPU {gpu_index} not available, using cuda:0")
-                device = 'cuda:0'
+                device_str = 'cuda:0'
                 
-            return device
+            return device_str
             
         return 'cpu'
     

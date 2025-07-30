@@ -121,7 +121,7 @@ class HybridTrainer:
         
         self.agent = PPOAgent(device=self.device)
         self.statistics = TrainingStatistics()
-        self.checkpoint_manager = CheckpointManager()
+        self.checkpoint_manager = CheckpointManager(difficulty_level=self.difficulty)
         
         # Training state
         self.episode_count = 0
@@ -273,6 +273,14 @@ class HybridTrainer:
         
         training_time = time.time() - training_start_time
         
+        # Save final model checkpoint
+        print(f"\nSaving final model...")
+        try:
+            final_checkpoint_path = self._save_final_checkpoint(training_metrics)
+            print(f"Final model saved: {final_checkpoint_path}")
+        except Exception as e:
+            print(f"Failed to save final model: {e}")
+        
         # Final results
         final_results = {
             'total_episodes': self.episode_count,
@@ -306,21 +314,111 @@ class HybridTrainer:
     
     def _save_checkpoint(self):
         """Save training checkpoint."""
-        checkpoint_data = {
-            'agent_state': self.agent.get_state(),
-            'episode_count': self.episode_count,
-            'total_timesteps': self.total_timesteps,
-            'statistics': self.statistics.get_state(),
-            'config': self.config,
-            'difficulty': self.difficulty
-        }
-        
-        self.checkpoint_manager.save_checkpoint(
-            self.agent,
-            self.episode_count,
-            checkpoint_data
-        )
-        print(f"Checkpoint saved at episode {self.episode_count}")
+        try:
+            # Get optimizer from agent if available
+            optimizer = getattr(self.agent, 'optimizer', None)
+            
+            # Prepare training stats and metrics
+            stats = self.statistics.get_summary()
+            training_stats = {
+                'total_games': stats.get('total_games', 0),
+                'player1_wins': stats.get('player1_wins', 0),
+                'player2_wins': stats.get('player2_wins', 0),
+                'draws': stats.get('draws', 0),
+                'avg_game_length': stats.get('avg_game_length', 0),
+                'win_rate': stats.get('player1_wins', 0) / max(stats.get('total_games', 1), 1) * 100
+            }
+            
+            training_metrics = {
+                'avg_reward': stats.get('avg_reward', 0),
+                'policy_loss': stats.get('policy_loss', 0),
+                'value_loss': stats.get('value_loss', 0),
+                'total_timesteps': self.total_timesteps
+            }
+            
+            additional_data = {
+                'difficulty': self.difficulty,
+                'episode_count': self.episode_count,
+                'config': self.config,
+                'statistics': self.statistics.get_state() if hasattr(self.statistics, 'get_state') else None,
+                'agent_state': self.agent.get_state() if hasattr(self.agent, 'get_state') else None
+            }
+            
+            # Call CheckpointManager with correct signature
+            checkpoint_path = self.checkpoint_manager.save_checkpoint(
+                agent=self.agent,
+                optimizer=optimizer,
+                episode=self.episode_count,
+                training_stats=training_stats,
+                training_metrics=training_metrics,
+                additional_data=additional_data
+            )
+            
+            print(f"Checkpoint saved successfully at episode {self.episode_count}")
+            print(f"   File: {checkpoint_path}")
+            
+        except Exception as e:
+            print(f"Failed to save checkpoint at episode {self.episode_count}: {e}")
+            # Don't stop training due to checkpoint failure
+            import traceback
+            traceback.print_exc()
+    
+    def _save_final_checkpoint(self, final_metrics: Dict[str, float]) -> str:
+        """Save final model checkpoint with special naming."""
+        try:
+            # Get optimizer from agent if available
+            optimizer = getattr(self.agent, 'optimizer', None)
+            
+            # Prepare training stats and metrics
+            stats = self.statistics.get_summary()
+            training_stats = {
+                'total_games': stats.get('total_games', 0),
+                'player1_wins': stats.get('player1_wins', 0),
+                'player2_wins': stats.get('player2_wins', 0),
+                'draws': stats.get('draws', 0),
+                'avg_game_length': stats.get('avg_game_length', 0),
+                'win_rate': stats.get('player1_wins', 0) / max(stats.get('total_games', 1), 1) * 100
+            }
+            
+            training_metrics = {
+                'avg_reward': stats.get('avg_reward', 0),
+                'policy_loss': final_metrics.get('policy_loss', 0),
+                'value_loss': final_metrics.get('value_loss', 0),
+                'total_timesteps': self.total_timesteps
+            }
+            
+            additional_data = {
+                'difficulty': self.difficulty,
+                'episode_count': self.episode_count,
+                'config': self.config,
+                'statistics': self.statistics.get_state() if hasattr(self.statistics, 'get_state') else None,
+                'agent_state': self.agent.get_state() if hasattr(self.agent, 'get_state') else None,
+                'training_completed': True
+            }
+            
+            # Create final model name based on difficulty and performance
+            win_rate = training_stats['win_rate']
+            final_model_name = f"final_{self.difficulty}_{self.episode_count}ep_{win_rate:.1f}wr.pt"
+            
+            # Call CheckpointManager with correct signature
+            checkpoint_path = self.checkpoint_manager.save_checkpoint(
+                agent=self.agent,
+                optimizer=optimizer,
+                episode=self.episode_count,
+                training_stats=training_stats,
+                training_metrics=training_metrics,
+                additional_data=additional_data,
+                checkpoint_name=final_model_name,
+                is_best=True  # Mark final model as best
+            )
+            
+            return checkpoint_path
+            
+        except Exception as e:
+            print(f"Failed to save final checkpoint: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def _evaluate_agent(self, num_eval_games: int = 100) -> Dict[str, float]:
         """Evaluate agent performance."""

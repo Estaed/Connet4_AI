@@ -75,7 +75,7 @@ class TrainingLogger:
         
         Args:
             log_dir: Base directory for all logs
-            tensorboard_dir: Specific directory for TensorBoard logs (defaults to log_dir/tensorboard)
+            tensorboard_dir: Specific directory for TensorBoard logs (defaults to log_dir)
             log_level: Console logging verbosity level
             enable_tensorboard: Whether to enable TensorBoard logging
             experiment_name: Name for this training experiment
@@ -99,7 +99,7 @@ class TrainingLogger:
         
         if self.enable_tensorboard:
             if tensorboard_dir is None:
-                tensorboard_dir = self.log_dir / "tensorboard" / experiment_name
+                tensorboard_dir = self.log_dir / experiment_name
             else:
                 tensorboard_dir = Path(tensorboard_dir) / experiment_name
             
@@ -111,7 +111,7 @@ class TrainingLogger:
                     flush_secs=flush_secs
                 )
                 self.info(f"TensorBoard logging enabled: {tensorboard_dir}")
-                self.info("View with: tensorboard --logdir logs/tensorboard")
+                self.info("View with: tensorboard --logdir logs")
             except Exception as e:
                 self.warning(f"Failed to initialize TensorBoard: {e}")
                 self.enable_tensorboard = False

@@ -584,6 +584,283 @@ class GameInterface:
         else:
             input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
 
+    def play_ai_vs_ai(self) -> None:
+        """Play AI vs AI mode with model selection."""
+        if not self.model_manager:
+            render_model_selection_error("Model manager not available")
+            input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+            return
+        
+        # Get available models
+        models = self.model_manager.get_models(sort_by='performance')
+        
+        if len(models) < 2:
+            render_model_selection_error("Need at least 2 trained models for AI vs AI")
+            input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+            return
+        
+        render_game_mode_header("AI vs AI MODE", Colors.PLAYER2)
+        
+        print(f"{Colors.INFO}Instructions:{Colors.RESET}")
+        print(f"- {Colors.INFO}Select two AI models to compete against each other{Colors.RESET}")
+        print(f"- {Colors.PLAYER1}AI Model 1 (RED X){Colors.RESET}: First player")
+        print(f"- {Colors.PLAYER2}AI Model 2 (BLUE O){Colors.RESET}: Second player")
+        print(f"- {Colors.WARNING}Watch different AI strategies compete!{Colors.RESET}")
+        print(f"- {Colors.INFO}Great way to evaluate training progress{Colors.RESET}")
+        
+        # Select first AI model
+        print(f"\n{Colors.HEADER}{'=' * 50}{Colors.RESET}")
+        print(f"{Colors.BOLD}STEP 1: Select First AI Model (Player X){Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
+        
+        render_model_selection_menu(models, "Select AI Model 1 (Player X)")
+        
+        valid_choices = [str(i) for i in range(1, len(models) + 1)] + ['b', 'back']
+        choice1 = self.get_user_choice(
+            f"\n{Colors.INFO}Select model 1 (1-{len(models)}) or 'b' for back: {Colors.RESET}",
+            valid_choices
+        )
+        
+        if choice1.lower() in ['b', 'back']:
+            return
+        
+        model1_index = int(choice1) - 1
+        ai_model_1 = models[model1_index]
+        
+        print(f"\n{Colors.SUCCESS}✅ AI Model 1 Selected: {ai_model_1.get_display_name()}{Colors.RESET}")
+        
+        # Select second AI model
+        print(f"\n{Colors.HEADER}{'=' * 50}{Colors.RESET}")
+        print(f"{Colors.BOLD}STEP 2: Select Second AI Model (Player O){Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 50}{Colors.RESET}")
+        
+        # Show available models (excluding the first one selected)
+        available_models = [m for i, m in enumerate(models) if i != model1_index]
+        render_model_selection_menu(available_models, "Select AI Model 2 (Player O)")
+        
+        valid_choices = [str(i) for i in range(1, len(available_models) + 1)] + ['b', 'back']
+        choice2 = self.get_user_choice(
+            f"\n{Colors.INFO}Select model 2 (1-{len(available_models)}) or 'b' for back: {Colors.RESET}",
+            valid_choices
+        )
+        
+        if choice2.lower() in ['b', 'back']:
+            return
+        
+        model2_index = int(choice2) - 1
+        ai_model_2 = available_models[model2_index]
+        
+        print(f"\n{Colors.SUCCESS}✅ AI Model 2 Selected: {ai_model_2.get_display_name()}{Colors.RESET}")
+        
+        # Show matchup summary
+        print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.BOLD}AI vs AI MATCHUP{Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.PLAYER1}Player X (RED): {ai_model_1.get_display_name()}{Colors.RESET}")
+        print(f"  Episode: {ai_model_1.episode:,}, Win Rate: {ai_model_1.win_rate:.1f}%")
+        print(f"  Skill Level: {ai_model_1.get_skill_level()}")
+        print()
+        print(f"{Colors.PLAYER2}Player O (BLUE): {ai_model_2.get_display_name()}{Colors.RESET}")
+        print(f"  Episode: {ai_model_2.episode:,}, Win Rate: {ai_model_2.win_rate:.1f}%")
+        print(f"  Skill Level: {ai_model_2.get_skill_level()}")
+        
+        # Get game settings
+        num_games = self.get_user_choice(
+            f"\n{Colors.INFO}How many games to play? (1-10): {Colors.RESET}",
+            [str(i) for i in range(1, 11)],
+        )
+        num_games = int(num_games)
+        
+        auto_advance = self.get_user_choice(
+            f"{Colors.INFO}Auto-advance between moves? (y/n): {Colors.RESET}",
+            ["y", "n", "yes", "no"],
+        ).lower() in ["y", "yes"]
+        
+        delay_time = 1.0 if auto_advance else 0.0
+        
+        # Load the AI models
+        print(f"\n{Colors.INFO}Loading AI models...{Colors.RESET}")
+        
+        try:
+            agent1 = self.model_manager.load_model_for_gameplay(ai_model_1.name)
+            agent2 = self.model_manager.load_model_for_gameplay(ai_model_2.name)
+            
+            if not agent1 or not agent2:
+                render_model_selection_error("Failed to load one or both AI models")
+                input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+                return
+                
+            print(f"{Colors.SUCCESS}✅ Both AI models loaded successfully!{Colors.RESET}")
+            
+        except Exception as e:
+            render_model_selection_error(f"Error loading AI models: {str(e)}")
+            input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+            return
+        
+        print(f"\n{Colors.WARNING}Starting {num_games} AI vs AI game(s)...{Colors.RESET}")
+        input(f"{Colors.INFO}Press Enter to begin the battle...{Colors.RESET}")
+        
+        # Play the games
+        self._play_ai_vs_ai_games(agent1, agent2, ai_model_1, ai_model_2, num_games, auto_advance, delay_time)
+
+    def _play_ai_vs_ai_games(self, agent1, agent2, model1_meta, model2_meta, num_games, auto_advance, delay_time):
+        """Play multiple AI vs AI games."""
+        game_results = []
+        
+        for game_num in range(num_games):
+            print(f"\n{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+            print(f"{Colors.BOLD}AI vs AI GAME {game_num + 1} of {num_games}{Colors.RESET}")
+            print(f"{Colors.HEADER}{'=' * 60}{Colors.RESET}")
+            
+            # Initialize new game with random starting player
+            self.game.reset()
+            starting_player = random.choice([1, -1])
+            self.game.current_player = starting_player
+            
+            # Announce which AI starts first
+            if starting_player == 1:
+                print(f"{Colors.SUCCESS}🎲 Random selection: {model1_meta.get_display_name()} (X) starts first!{Colors.RESET}")
+                current_agent = agent1
+                other_agent = agent2
+                current_model = model1_meta
+                other_model = model2_meta
+            else:
+                print(f"{Colors.WARNING}🎲 Random selection: {model2_meta.get_display_name()} (O) starts first!{Colors.RESET}")
+                current_agent = agent2
+                other_agent = agent1
+                current_model = model2_meta
+                other_model = model1_meta
+            
+            # Brief pause to show the selection
+            time.sleep(0.5)
+            
+            game_start_time = time.time()
+            move_count = 0
+            
+            # Game loop
+            while not self.game.game_over:
+                # Show current board state
+                self.game.render(show_stats=True)
+                
+                # Get valid moves
+                valid_moves = self.game.get_valid_moves()
+                
+                # Get AI action
+                try:
+                    # Convert board to format expected by agent
+                    ai_observation = self.game.board.copy()
+                    action = current_agent.get_action(ai_observation, valid_moves)
+                    
+                    # Display AI's choice
+                    agent_symbol = "X" if self.game.current_player == 1 else "O"
+                    agent_name = current_model.get_display_name()
+                    
+                    print(f"\n{Colors.INFO}🤖 {agent_name} ({agent_symbol}) is thinking...{Colors.RESET}")
+                    
+                    if auto_advance:
+                        time.sleep(0.3)  # Brief thinking time
+                    
+                    print(f"{Colors.SUCCESS}🤖 {agent_name} ({agent_symbol}) chooses column {action + 1}{Colors.RESET}")
+                    
+                    # Make the move
+                    if action in valid_moves and self.game.drop_piece(action):
+                        move_count += 1
+                    else:
+                        print(f"{Colors.ERROR}Invalid move by {agent_name}! Using random fallback.{Colors.RESET}")
+                        # Fallback to random valid move
+                        fallback_action = random.choice(valid_moves)
+                        self.game.drop_piece(fallback_action)
+                        move_count += 1
+                        print(f"{Colors.INFO}Used column {fallback_action + 1} instead.{Colors.RESET}")
+                    
+                except Exception as e:
+                    print(f"{Colors.ERROR}AI error for {current_model.get_display_name()}: {e}. Using random move.{Colors.RESET}")
+                    valid_actions = self.game.get_valid_moves()
+                    fallback_action = random.choice(valid_actions)
+                    self.game.drop_piece(fallback_action)
+                    move_count += 1
+                    print(f"{Colors.INFO}Used column {fallback_action + 1} (random).{Colors.RESET}")
+                
+                # Delay or wait for user input
+                if auto_advance:
+                    time.sleep(delay_time)
+                else:
+                    input(f"{Colors.WARNING}Press Enter for next move...{Colors.RESET}")
+                
+                # Switch agents
+                current_agent, other_agent = other_agent, current_agent
+                current_model, other_model = other_model, current_model
+            
+            # Game completed - show final state
+            self.game.render(show_stats=True)
+            
+            game_time = time.time() - game_start_time
+            
+            # Record results
+            if self.game.winner == 1:
+                winner_name = f"{model1_meta.get_display_name()} (X)"
+                self.stats["player1_wins"] += 1
+            elif self.game.winner == -1:
+                winner_name = f"{model2_meta.get_display_name()} (O)"
+                self.stats["player2_wins"] += 1
+            else:
+                winner_name = "Draw"
+                self.stats["draws"] += 1
+            
+            game_results.append({
+                "game": game_num + 1,
+                "winner": winner_name,
+                "moves": move_count,
+                "time": game_time,
+            })
+            
+            self.stats["games_played"] += 1
+            self.stats["total_moves"] += move_count
+            
+            print(f"\n{Colors.SUCCESS}🏆 Game {game_num + 1} Result: {winner_name}{Colors.RESET}")
+            print(f"{Colors.INFO}Duration: {game_time:.1f}s, Moves: {move_count}{Colors.RESET}")
+            
+            if game_num < num_games - 1:  # Not the last game
+                if not auto_advance:
+                    input(f"{Colors.WARNING}Press Enter for next game...{Colors.RESET}")
+                else:
+                    time.sleep(1.0)
+        
+        # Show session summary
+        print(f"\n{Colors.HEADER}{'=' * 70}{Colors.RESET}")
+        print(f"{Colors.BOLD}AI vs AI SESSION SUMMARY - {num_games} GAMES{Colors.RESET}")
+        print(f"{Colors.HEADER}{'=' * 70}{Colors.RESET}")
+        
+        model1_wins = sum(1 for r in game_results if model1_meta.get_display_name() in r["winner"])
+        model2_wins = sum(1 for r in game_results if model2_meta.get_display_name() in r["winner"])
+        draws = sum(1 for r in game_results if r["winner"] == "Draw")
+        
+        print(f"\n{Colors.PLAYER1}{model1_meta.get_display_name()} (X) Wins: {model1_wins}{Colors.RESET}")
+        print(f"  Win Rate: {(model1_wins/num_games)*100:.1f}%")
+        print(f"  Training: Episode {model1_meta.episode:,}, {model1_meta.get_skill_level()}")
+        
+        print(f"\n{Colors.PLAYER2}{model2_meta.get_display_name()} (O) Wins: {model2_wins}{Colors.RESET}")
+        print(f"  Win Rate: {(model2_wins/num_games)*100:.1f}%")
+        print(f"  Training: Episode {model2_meta.episode:,}, {model2_meta.get_skill_level()}")
+        
+        print(f"\n{Colors.WARNING}Draws: {draws} ({(draws/num_games)*100:.1f}%){Colors.RESET}")
+        
+        avg_moves = sum(r["moves"] for r in game_results) / len(game_results)
+        avg_time = sum(r["time"] for r in game_results) / len(game_results)
+        
+        print(f"\n{Colors.INFO}Average game length: {avg_moves:.1f} moves{Colors.RESET}")
+        print(f"{Colors.INFO}Average game time: {avg_time:.1f} seconds{Colors.RESET}")
+        
+        # Determine overall winner
+        if model1_wins > model2_wins:
+            print(f"\n{Colors.SUCCESS}🏆 OVERALL WINNER: {model1_meta.get_display_name()}!{Colors.RESET}")
+        elif model2_wins > model1_wins:
+            print(f"\n{Colors.SUCCESS}🏆 OVERALL WINNER: {model2_meta.get_display_name()}!{Colors.RESET}")
+        else:
+            print(f"\n{Colors.WARNING}🤝 SERIES TIED! Both AIs performed equally well!{Colors.RESET}")
+        
+        input(f"\n{Colors.WARNING}Press Enter to return to main menu...{Colors.RESET}")
+
     def view_statistics(self) -> None:
         """Display game statistics."""
         render_statistics(self.stats)
@@ -867,8 +1144,8 @@ class GameInterface:
             self.display_main_menu()
 
             choice = self.get_user_choice(
-                f"{Colors.INFO}Enter your choice (1-7): {Colors.RESET}",
-                ["1", "2", "3", "4", "5", "6", "7"],
+                f"{Colors.INFO}Enter your choice (1-8): {Colors.RESET}",
+                ["1", "2", "3", "4", "5", "6", "7", "8"],
             )
 
             if choice == "1":
@@ -878,12 +1155,14 @@ class GameInterface:
             elif choice == "3":
                 self.play_human_vs_ai()
             elif choice == "4":
-                self.start_training()
+                self.play_ai_vs_ai()
             elif choice == "5":
-                self.manage_models()
+                self.start_training()
             elif choice == "6":
-                self.view_statistics()
+                self.manage_models()
             elif choice == "7":
+                self.view_statistics()
+            elif choice == "8":
                 print(
                     f"{Colors.SUCCESS}Thanks for playing Connect4! "
                     f"Goodbye!{Colors.RESET}"
