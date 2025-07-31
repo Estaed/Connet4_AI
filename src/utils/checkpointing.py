@@ -43,9 +43,13 @@ except ImportError:
         get_config = None
         Config = None
 
-# Add safe globals for PyTorch 2.6+ weights_only loading
-if Config is not None:
-    torch.serialization.add_safe_globals([Config])
+# Add safe globals for PyTorch 2.6+ weights_only loading (if available)
+if Config is not None and hasattr(torch.serialization, 'add_safe_globals'):
+    try:
+        torch.serialization.add_safe_globals([Config])
+    except AttributeError:
+        # Method not available in this PyTorch version
+        pass
 
 
 class CheckpointManager:
