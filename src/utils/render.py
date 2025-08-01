@@ -10,6 +10,8 @@ This module centralizes all terminal rendering functionality including:
 All rendering functions use consistent ANSI color codes and formatting.
 """
 
+from typing import Any
+
 
 class Colors:
     """ANSI color codes for terminal styling."""
