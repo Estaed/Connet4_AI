@@ -1,6 +1,20 @@
-# Connect4 AI - Reinforcement Learning Training System
+# Connect4 AI - Train Your Own Connect4 Champion! 🏆
 
-A sophisticated, terminal-based reinforcement learning environment where an AI agent learns to master Connect4 through self-play using the PPO (Proximal Policy Optimization) algorithm. The system features hybrid CPU-GPU architecture, massive parallel training capabilities, and an intuitive game interface.
+Ever wanted to build an AI that can crush you at Connect4? Well, here's your chance! This is a fun terminal-based RL system where an AI agent learns to play Connect4 by battling itself thousands of times. It's got all the cool stuff - GPU acceleration, multiple game modes, and you can even watch AIs fight each other!
+
+## 📸 Screenshots
+
+**Main Menu** - Clean and simple interface
+![Main Screen](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Main_Screen.PNG)
+
+**Training in Action** - Watch your AI get smarter
+![Training Screen](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Training_Screen.PNG)
+
+**Model Management** - Browse your AI collection
+![Model Management](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Model_Management.PNG)
+
+**Game Environment** - Play against your creation
+![Game Environment](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Game_Environment.png)
 
 ## 🎯 Project Overview
 
@@ -40,10 +54,11 @@ This Connect4 RL system demonstrates modern reinforcement learning techniques wi
 
 ## 🚀 Quick Setup
 
-### Prerequisites
-- Python 3.9+
-- CUDA-capable (CUDA 11.8+) GPU (optional, will fallback to CPU)
-- ~2GB RAM, ~1GB GPU memory (if using GPU)
+### What You'll Need
+- Python 3.9+ (anything newer works fine)
+- A decent GPU if you want fast training (but CPU works too, just slower)
+- About 2GB of RAM (nothing crazy)
+- Maybe 1GB GPU memory if you're using the GPU
 
 ### Installation
 
@@ -88,23 +103,22 @@ python play.py --debug
 ### Game Modes
 
 **1. Human vs Human** 🎯
-- Classic Connect4 gameplay between two players
-- Perfect for learning the game or having fun with friends
+- Classic Connect4 - just you and a friend going at it
+- Perfect for when you want to settle who's the real Connect4 master
 
 **2. Human vs AI** 🤖
-- Challenge trained AI models
-- Choose from different AI skill levels
-- Watch the AI "think" and make strategic decisions
+- Time to face your creation! Challenge the AI you trained
+- Pick different skill levels and watch it think
+- Pro tip: Don't get too cocky, these AIs get scary good
 
 **3. AI vs AI** 🏆
-- Watch two AI models compete against each other
-- Compare different training checkpoints
-- Analyze AI strategies and improvement over time
-- Configure match series (1-10 games)
+- The ultimate showdown - watch your AIs battle each other
+- Compare different versions and see which training session was better
+- Grab some popcorn, it's actually pretty entertaining
 
 **4. Random vs Random** 🎲
-- Baseline gameplay with random moves
-- Useful for testing and environment validation
+- Two AIs just randomly placing pieces (as dumb as it sounds)
+- Good for testing stuff and making yourself feel better about your skills
 
 ### Additional Features
 
@@ -135,21 +149,20 @@ python play.py
 
 ### Training Difficulty Levels
 
-**Small (100 environments)** - Perfect for beginners
-- Fast training cycles
-- Good for testing and experimentation
-- Learns basic gameplay in ~1,000 episodes
+**Small (100 environments)** - Baby's first AI
+- Quick and easy, great for testing
+- Your AI will learn basic moves pretty fast (~1,000 episodes)
+- Perfect if you just want to see it work
 
-**Medium (1,000 environments)** - Balanced performance
-- Recommended for most users
-- Good balance between speed and learning quality
-- Develops strong strategies in ~5,000 episodes
+**Medium (1,000 environments)** - The sweet spot
+- Best for most people - not too slow, not too demanding
+- Develops some serious strategies in about 5,000 episodes
+- Recommended unless you're feeling ambitious
 
-**Impossible (10,000 environments)** - Maximum performance
-- Requires powerful hardware (GPU recommended)
-- Highest quality learning
-- Develops advanced strategies in ~10,000 episodes
-- I suggest for this level, use strong gpu or rent a gpu
+**Impossible (10,000 environments)** - Beast mode
+- Hope you've got a good GPU because this will put it to work
+- Creates genuinely scary-good AIs after 10,000+ episodes
+- Only try this if you want to create a Connect4 monster
 
 ### Training Milestones
 - **Episode 100**: Agent learns to make only legal moves
@@ -278,30 +291,25 @@ python scripts/play.py --debug-mode  # alias
 - **Action Masking**: Prevents invalid moves during training
 - **Modular Design**: Clean separation between game, agent, and training
 
-## 🤝 Contributing
+## 🤝 Want to Help Out?
 
-This project follows clean, maintainable coding practices:
+This project is pretty clean and well-organized (if I do say so myself):
 
-- **Type Hints**: Full typing support throughout
-- **Documentation**: Comprehensive docstrings
-- **Testing**: >90% test coverage
-- **Code Quality**: Black formatting, mypy type checking
-- **Modular Design**: Clear separation of concerns
+- **Type Hints**: Everything's properly typed so your IDE won't yell at you
+- **Documentation**: Lots of comments and docs so you know what's going on
+- **Testing**: Tons of tests so things don't randomly break
+- **Code Quality**: Formatted with Black, linted, all that good stuff
+- **Clean Code**: Each part does its own thing, no spaghetti here
 
 ## 📄 License
 
-MIT License
+Hey, this is free stuff! 🎉
 
-Copyright (c) 2025 Connect4 AI Project
+You can use this code however you want, whenever you want, for whatever you want. Want to modify it? Go for it! Want to sell it? Sure! Want to use it in your own projects? Absolutely!
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+No strings attached, no complicated legal stuff. Just take it and have fun with it. If you make something cool, I'd love to hear about it, but you don't have to.
 
-Do whatever you want with that code you can steal
+Basically: **Do whatever you want with this code!** ✨
 
 ## 🔗 References
 
@@ -311,4 +319,6 @@ Do whatever you want with that code you can steal
 
 ---
 
-**Ready to train your Connect4 AI champion? Run `python scripts/play.py` and start your journey!** 🚀
+**Ready to create your Connect4 AI overlord? Just run `python scripts/play.py` and let's see what you can build!** 🚀
+
+Have fun, and don't blame me if your AI becomes unbeatable! 😄
