@@ -131,7 +131,7 @@ def format_metric(label: str, value: str, color: str = Colors.INFO) -> str:
     return f"{label:<20} {color}{value}{Colors.RESET}"
 
 
-def render_connect4_game(game_obj, mode: str = "human", show_stats: bool = True, show_column_numbers: bool = True):
+def render_connect4_game(game_obj: Any, mode: str = "human", show_stats: bool = True, show_column_numbers: bool = True) -> None:
     """
     Render the Connect4 game board and statistics.
 
@@ -658,7 +658,7 @@ def render_model_selection_menu(models: list, title: str = "Select AI Model") ->
     print(f"\n{Colors.HEADER}{'-' * 60}{Colors.RESET}")
 
 
-def render_model_details(model, show_validation: bool = True) -> None:
+def render_model_details(model: Any, show_validation: bool = True) -> None:
     """
     Display detailed information about a specific model.
     

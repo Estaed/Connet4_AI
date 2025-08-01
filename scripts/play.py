@@ -56,8 +56,13 @@ class GameInterface:
     Handles user input, game flow, and display.
     """
 
-    def __init__(self):
-        """Initialize the game interface."""
+    def __init__(self, debug_mode: bool = False):
+        """Initialize the game interface.
+        
+        Args:
+            debug_mode: Whether to show detailed initialization logs
+        """
+        self.debug_mode = debug_mode
         self.game = Connect4Game()
         self.stats = {
             "games_played": 0,
@@ -69,8 +74,13 @@ class GameInterface:
         
         # Initialize model management system
         try:
-            self.model_manager = ModelManager(models_dir="models", auto_refresh=True)
-            print(f"[GameInterface] Model manager initialized with {len(self.model_manager.get_models())} models")
+            self.model_manager = ModelManager(
+                models_dir="models", 
+                auto_refresh=True,
+                debug_mode=debug_mode
+            )
+            if debug_mode:
+                print(f"[GameInterface] Model manager initialized with {len(self.model_manager.get_models())} models")
         except Exception as e:
             print(f"Warning: Could not initialize model manager: {e}")
             self.model_manager = None
@@ -1138,7 +1148,11 @@ class GameInterface:
 
     def run(self) -> None:
         """Main game loop."""
-        print("Starting Connect4 Interactive Game Interface...")
+        if not self.debug_mode:
+            print("Starting Connect4 Interactive Game Interface...")
+        else:
+            print("Starting Connect4 Interactive Game Interface...")
+            print("[DEBUG MODE] Detailed logging enabled")
 
         while True:
             self.display_main_menu()
@@ -1172,14 +1186,42 @@ class GameInterface:
 
 def main():
     """Main entry point."""
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Connect4 Interactive Game Interface')
+    parser.add_argument('--debug', action='store_true', 
+                       help='Enable debug mode with detailed logging')
+    parser.add_argument('--debug-mode', action='store_true', 
+                       help='Enable debug mode with detailed logging (alias for --debug)')
+    
+    args = parser.parse_args()
+    debug_mode = args.debug or args.debug_mode
+    
     try:
-        interface = GameInterface()
+        interface = GameInterface(debug_mode=debug_mode)
         interface.run()
     except KeyboardInterrupt:
         print("\n\nProgram interrupted. Goodbye!")
+    except ImportError as e:
+        print(f"Import error: {e}")
+        print("Please check that all dependencies are installed: pip install -r requirements.txt")
+        return 1
+    except FileNotFoundError as e:
+        print(f"File not found: {e}")
+        print("Please ensure you're running from the project root directory.")
+        return 1
+    except PermissionError as e:
+        print(f"Permission error: {e}")
+        print("Please check file permissions or run with appropriate privileges.")
+        return 1
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"Unexpected error occurred: {e}")
         print("Please check your installation and try again.")
+        if debug_mode:
+            import traceback
+            print("\nFull traceback (debug mode):")
+            traceback.print_exc()
         return 1
 
     return 0

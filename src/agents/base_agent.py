@@ -82,7 +82,7 @@ class BaseAgent(ABC):
     def get_action(self, 
                    observation: np.ndarray, 
                    valid_actions: Optional[List[int]] = None,
-                   **kwargs) -> int:
+                   **kwargs: Any) -> int:
         """
         Get action for given observation.
         
@@ -102,7 +102,7 @@ class BaseAgent(ABC):
     @abstractmethod 
     def update(self, 
                experiences: Optional[Dict[str, Any]] = None,
-               **kwargs) -> Dict[str, float]:
+               **kwargs: Any) -> Dict[str, float]:
         """
         Update agent based on experiences.
         
@@ -591,7 +591,7 @@ class BaseAgent(ABC):
 
 
 # Utility functions for agent management
-def create_agent(agent_type: str, **kwargs) -> BaseAgent:
+def create_agent(agent_type: str, **kwargs: Any) -> BaseAgent:
     """
     Factory function to create agents by type name.
     

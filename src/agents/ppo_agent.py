@@ -260,7 +260,7 @@ class PPOAgent(BaseAgent):
                    observation: np.ndarray, 
                    valid_actions: Optional[List[int]] = None,
                    deterministic: bool = False,
-                   **kwargs) -> int:
+                   **kwargs: Any) -> int:
         """
         Get action for given observation using current policy.
         
@@ -392,7 +392,7 @@ class PPOAgent(BaseAgent):
     
     def update(self, 
                experiences: Optional[Dict[str, Any]] = None,
-               **kwargs) -> Dict[str, float]:
+               **kwargs: Any) -> Dict[str, float]:
         """
         Update agent using PPO algorithm.
         

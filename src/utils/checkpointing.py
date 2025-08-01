@@ -72,7 +72,8 @@ class CheckpointManager:
         auto_save_frequency: int = 1000,  # Every 1000 episodes
         enable_compression: bool = True,
         model_name_prefix: str = "connect4_ppo",
-        difficulty_level: Optional[str] = None
+        difficulty_level: Optional[str] = None,
+        debug_mode: bool = False
     ):
         """
         Initialize checkpoint manager.
@@ -84,6 +85,7 @@ class CheckpointManager:
             enable_compression: Whether to compress checkpoint files
             model_name_prefix: Prefix for model filenames
             difficulty_level: Training difficulty level (small, medium, impossible, custom)
+            debug_mode: Whether to show detailed initialization logs
         """
         self.base_checkpoint_dir = Path(checkpoint_dir)
         self.difficulty_level = difficulty_level
@@ -100,6 +102,7 @@ class CheckpointManager:
         self.auto_save_frequency = auto_save_frequency
         self.enable_compression = enable_compression
         self.model_name_prefix = model_name_prefix
+        self.debug_mode = debug_mode
         
         # Track checkpoint history
         self.checkpoint_history: List[Dict[str, Any]] = []
@@ -112,19 +115,20 @@ class CheckpointManager:
         # Load existing checkpoint history
         self._discover_existing_checkpoints()
         
-        print(f"[CheckpointManager] Initialized")
-        print(f"  Base directory: {self.base_checkpoint_dir}")
-        if self.difficulty_level:
-            print(f"  Difficulty folder: {self.difficulty_level}")
-        print(f"  Full path: {self.checkpoint_dir}")
-        print(f"  Auto-save frequency: {self.auto_save_frequency:,} episodes")
-        print(f"  Max checkpoints: {self.max_checkpoints}")
-        print(f"  Compression: {self.enable_compression}")
-        print(f"  Found {len(self.checkpoint_history)} existing checkpoints")
+        if self.debug_mode:
+            print(f"[CheckpointManager] Initialized")
+            print(f"  Base directory: {self.base_checkpoint_dir}")
+            if self.difficulty_level:
+                print(f"  Difficulty folder: {self.difficulty_level}")
+            print(f"  Full path: {self.checkpoint_dir}")
+            print(f"  Auto-save frequency: {self.auto_save_frequency:,} episodes")
+            print(f"  Max checkpoints: {self.max_checkpoints}")
+            print(f"  Compression: {self.enable_compression}")
+            print(f"  Found {len(self.checkpoint_history)} existing checkpoints")
     
     def save_checkpoint(
         self,
-        agent,  # PPOAgent instance
+        agent: Any,  # PPOAgent instance - using Any to avoid circular imports
         optimizer: Optional[torch.optim.Optimizer],
         episode: int,
         training_stats: Optional[Dict[str, Any]] = None,
@@ -161,7 +165,8 @@ class CheckpointManager:
         
         checkpoint_path = self.checkpoint_dir / checkpoint_name
         
-        print(f"[CheckpointManager] Saving checkpoint: {checkpoint_name}")
+        if self.debug_mode:
+            print(f"[CheckpointManager] Saving checkpoint: {checkpoint_name}")
         
         # Prepare checkpoint data
         checkpoint_data = {
@@ -228,10 +233,11 @@ class CheckpointManager:
             file_size_mb = checkpoint_path.stat().st_size / (1024 * 1024)
             save_time = time.time() - save_start_time
             
-            print(f"[CheckpointManager] Checkpoint saved successfully")
-            print(f"  File: {checkpoint_name}")
-            print(f"  Size: {file_size_mb:.1f} MB")
-            print(f"  Save time: {save_time:.2f}s")
+            if self.debug_mode:
+                print(f"[CheckpointManager] Checkpoint saved successfully")
+                print(f"  File: {checkpoint_name}")
+                print(f"  Size: {file_size_mb:.1f} MB")
+                print(f"  Save time: {save_time:.2f}s")
             
             # Update checkpoint history
             checkpoint_info = {
@@ -266,7 +272,7 @@ class CheckpointManager:
     def load_checkpoint(
         self,
         checkpoint_path: Union[str, Path],
-        agent = None,  # PPOAgent instance
+        agent: Optional[Any] = None,  # PPOAgent instance - using Any to avoid circular imports
         optimizer: Optional[torch.optim.Optimizer] = None,
         device: Optional[Union[str, torch.device]] = None,
         strict_loading: bool = True,
@@ -292,7 +298,8 @@ class CheckpointManager:
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
         
-        print(f"[CheckpointManager] Loading checkpoint: {checkpoint_path.name}")
+        if self.debug_mode:
+            print(f"[CheckpointManager] Loading checkpoint: {checkpoint_path.name}")
         
         try:
             # Load checkpoint data with weights_only=False for backward compatibility
@@ -313,9 +320,11 @@ class CheckpointManager:
                             checkpoint_data['model_state_dict'], 
                             strict=strict_loading
                         )
-                        print(f"[CheckpointManager] Model state loaded")
+                        if self.debug_mode:
+                            print(f"[CheckpointManager] Model state loaded")
                     else:
-                        print(f"[CheckpointManager] ⚠️  Agent has no 'network' attribute")
+                        if self.debug_mode:
+                            print(f"[CheckpointManager] ⚠️  Agent has no 'network' attribute")
                 except Exception as e:
                     if strict_loading:
                         raise
@@ -328,7 +337,8 @@ class CheckpointManager:
                 checkpoint_data['optimizer_state_dict']):
                 try:
                     optimizer.load_state_dict(checkpoint_data['optimizer_state_dict'])
-                    print(f"[CheckpointManager] Optimizer state loaded")
+                    if self.debug_mode:
+                        print(f"[CheckpointManager] Optimizer state loaded")
                 except Exception as e:
                     if strict_loading:
                         raise
@@ -363,9 +373,10 @@ class CheckpointManager:
             load_time = time.time() - load_start_time
             self.load_times.append(load_time)
             
-            print(f"[CheckpointManager] Checkpoint loaded successfully")
-            print(f"  Episode: {checkpoint_data.get('episode', 'unknown'):,}")
-            print(f"  Load time: {load_time:.2f}s")
+            if self.debug_mode:
+                print(f"[CheckpointManager] Checkpoint loaded successfully")
+                print(f"  Episode: {checkpoint_data.get('episode', 'unknown'):,}")
+                print(f"  Load time: {load_time:.2f}s")
             
             return checkpoint_data
             
@@ -518,7 +529,8 @@ class CheckpointManager:
                     checkpoint_path = Path(checkpoint['path'])
                     if checkpoint_path.exists():
                         checkpoint_path.unlink()
-                        print(f"[CheckpointManager] Removed old checkpoint: {checkpoint['name']}")
+                        if self.debug_mode:
+                            print(f"[CheckpointManager] Removed old checkpoint: {checkpoint['name']}")
                     
                     # Remove from history
                     self.checkpoint_history.remove(checkpoint)
@@ -561,7 +573,8 @@ def create_checkpoint_manager(
     max_checkpoints: int = 5,
     auto_save_frequency: int = 1000,
     model_name_prefix: str = "connect4_ppo",
-    difficulty_level: Optional[str] = None
+    difficulty_level: Optional[str] = None,
+    debug_mode: bool = False
 ) -> CheckpointManager:
     """
     Factory function to create checkpoint manager.
@@ -572,6 +585,7 @@ def create_checkpoint_manager(
         auto_save_frequency: Episodes between auto-saves
         model_name_prefix: Prefix for model filenames
         difficulty_level: Training difficulty level for folder organization
+        debug_mode: Whether to show detailed logs
     
     Returns:
         Configured CheckpointManager
@@ -581,7 +595,8 @@ def create_checkpoint_manager(
         max_checkpoints=max_checkpoints,
         auto_save_frequency=auto_save_frequency,
         model_name_prefix=model_name_prefix,
-        difficulty_level=difficulty_level
+        difficulty_level=difficulty_level,
+        debug_mode=debug_mode
     )
 
 

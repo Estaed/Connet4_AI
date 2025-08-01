@@ -265,7 +265,7 @@ class TrainingLogger:
         except Exception as e:
             self.debug(f"Failed to log hardware stats: {e}")
     
-    def log_model_architecture(self, model, input_shape: tuple = (1, 1, 6, 7)) -> None:
+    def log_model_architecture(self, model: Any, input_shape: tuple = (1, 1, 6, 7)) -> None:
         """
         Log model architecture to TensorBoard.
         

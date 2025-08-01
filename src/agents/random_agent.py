@@ -7,7 +7,7 @@ and provides a simple baseline for testing the environment.
 """
 
 import random
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -60,7 +60,7 @@ class RandomAgent(BaseAgent):
         self,
         observation: np.ndarray,
         valid_actions: Optional[List[int]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> int:
         """
         Get random action from valid moves.
@@ -109,7 +109,7 @@ class RandomAgent(BaseAgent):
         return action
 
     def update(
-        self, experiences: Optional[Dict[str, Any]] = None, **kwargs
+        self, experiences: Optional[Dict[str, Any]] = None, **kwargs: Any
     ) -> Dict[str, float]:
         """
         Update agent (no-op for random agent).
@@ -221,7 +221,7 @@ def create_seeded_random_agent(
 
 def create_random_agent_pair(
     seed1: int, seed2: int
-) -> tuple[RandomAgent, RandomAgent]:
+) -> Tuple[RandomAgent, RandomAgent]:
     """
     Create two random agents with different seeds for testing.
 

@@ -6,7 +6,7 @@ including win rates, PPO metrics, and performance monitoring.
 """
 
 import time
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 class TrainingStatistics:
@@ -98,7 +98,7 @@ class TrainingStatistics:
                 remaining_episodes = total_episodes - episode
                 self.performance_stats['eta'] = remaining_episodes * time_per_episode
     
-    def record_step_batch(self, info_batch):
+    def record_step_batch(self, info_batch: List[Dict[str, Any]]) -> None:
         """Record information from a batch of environment steps."""
         if not info_batch:
             return

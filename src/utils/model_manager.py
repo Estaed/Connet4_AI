@@ -22,6 +22,15 @@ from pathlib import Path
 import json
 import warnings
 
+# Import logging system
+try:
+    from .logging_utils import LogLevel, TrainingLogger
+    LOGGING_AVAILABLE = True
+except ImportError:
+    LOGGING_AVAILABLE = False
+    LogLevel = None
+    TrainingLogger = None
+
 try:
     import torch
     TORCH_AVAILABLE = True
@@ -150,7 +159,8 @@ class ModelManager:
         self,
         models_dir: Union[str, Path] = "models",
         cache_file: Optional[str] = "model_cache.json",
-        auto_refresh: bool = True
+        auto_refresh: bool = True,
+        debug_mode: bool = False
     ):
         """
         Initialize the model manager.
@@ -159,12 +169,14 @@ class ModelManager:
             models_dir: Directory containing model checkpoints
             cache_file: File to cache model metadata (None to disable)
             auto_refresh: Whether to automatically refresh model list
+            debug_mode: Whether to show detailed initialization logs
         """
         self.models_dir = Path(models_dir)
         self.models_dir.mkdir(parents=True, exist_ok=True)
         
         self.cache_file = Path(models_dir) / cache_file if cache_file else None
         self.auto_refresh = auto_refresh
+        self.debug_mode = debug_mode
         
         # Model storage
         self.models: Dict[str, ModelMetadata] = {}
@@ -182,14 +194,16 @@ class ModelManager:
         if auto_refresh:
             self.refresh_models()
         
-        print(f"[ModelManager] Initialized")
-        print(f"  Models directory: {self.models_dir}")
-        print(f"  Found {len(self.models)} models")
-        print(f"  Cache file: {self.cache_file}")
+        if self.debug_mode:
+            print(f"[ModelManager] Initialized")
+            print(f"  Models directory: {self.models_dir}")
+            print(f"  Found {len(self.models)} models")
+            print(f"  Cache file: {self.cache_file}")
     
     def refresh_models(self) -> None:
         """Refresh the list of available models."""
-        print("[ModelManager] Refreshing model list...")
+        if self.debug_mode:
+            print("[ModelManager] Refreshing model list...")
         
         # Clear existing models
         old_count = len(self.models)
@@ -220,7 +234,8 @@ class ModelManager:
                 print(f"Warning: Could not use checkpoint manager: {e}")
         
         new_count = len(self.models)
-        print(f"[ModelManager] Model refresh complete: {old_count} -> {new_count} models")
+        if self.debug_mode:
+            print(f"[ModelManager] Model refresh complete: {old_count} -> {new_count} models")
         
         # Save to cache
         self._save_cache()
@@ -339,7 +354,8 @@ class ModelManager:
             print(f"Error: Model '{model_name}' not found")
             return None
         
-        print(f"[ModelManager] Loading model for gameplay: {model_name}")
+        if self.debug_mode:
+            print(f"[ModelManager] Loading model for gameplay: {model_name}")
         
         try:
             # Determine device
@@ -363,10 +379,11 @@ class ModelManager:
                 if hasattr(agent, 'network') and 'model_state_dict' in checkpoint_data:
                     agent.network.load_state_dict(checkpoint_data['model_state_dict'])
             
-            print(f"[ModelManager] Model loaded successfully")
-            print(f"  Episode: {model_metadata.episode:,}")
-            print(f"  Win Rate: {model_metadata.win_rate:.1f}%")
-            print(f"  Skill Level: {model_metadata.get_skill_level()}")
+            if self.debug_mode:
+                print(f"[ModelManager] Model loaded successfully")
+                print(f"  Episode: {model_metadata.episode:,}")
+                print(f"  Win Rate: {model_metadata.win_rate:.1f}%")
+                print(f"  Skill Level: {model_metadata.get_skill_level()}")
             
             return agent
             
@@ -542,7 +559,8 @@ class ModelManager:
                 )
                 self.models[model_data['name']] = metadata
             
-            print(f"[ModelManager] Loaded {len(self.models)} models from cache")
+            if self.debug_mode:
+                print(f"[ModelManager] Loaded {len(self.models)} models from cache")
             
         except Exception as e:
             print(f"Warning: Could not load model cache: {e}")
@@ -568,7 +586,8 @@ class ModelManager:
 # Factory functions
 def create_model_manager(
     models_dir: str = "models",
-    auto_refresh: bool = True
+    auto_refresh: bool = True,
+    debug_mode: bool = False
 ) -> ModelManager:
     """
     Factory function to create a model manager.
@@ -576,13 +595,15 @@ def create_model_manager(
     Args:
         models_dir: Directory containing model checkpoints
         auto_refresh: Whether to automatically refresh model list
+        debug_mode: Whether to show detailed logs
         
     Returns:
         Configured ModelManager instance
     """
     return ModelManager(
         models_dir=models_dir,
-        auto_refresh=auto_refresh
+        auto_refresh=auto_refresh,
+        debug_mode=debug_mode
     )
 
 
