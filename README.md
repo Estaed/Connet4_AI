@@ -4,17 +4,17 @@ Ever wanted to build an AI that can crush you at Connect4? Well, here's your cha
 
 ## 📸 Screenshots
 
-**Main Menu** - Clean and simple interface
-![Main Screen](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Main_Screen.PNG)
+**Main Menu** - Clean and simple interface  
+[🖼️ View Main Screen](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Main_Screen.PNG)
 
-**Training in Action** - Watch your AI get smarter
-![Training Screen](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Training_Screen.PNG)
+**Training in Action** - Watch your AI get smarter  
+[🖼️ View Training Screen](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Training_Screen.PNG)
 
-**Model Management** - Browse your AI collection
-![Model Management](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Model_Management.PNG)
+**Model Management** - Browse your AI collection  
+[🖼️ View Model Management](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Model_Management.PNG)
 
-**Game Environment** - Play against your creation
-![Game Environment](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Game_Environment.png)
+**Game Environment** - Play against your creation  
+[🖼️ View Game Environment](https://github.com/Estaed/Connet4_AI/blob/master/ScreenShots/Game_Environment.png)
 
 ## 🎯 Project Overview
 
